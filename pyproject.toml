@@ -1,5 +1,5 @@
 [project]
-name = "lab"
+name = "gpt"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -7,8 +7,32 @@ authors = [
     { name = "k", email = "keatone@gmail.com" }
 ]
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "datasets>=4.0.0",
+    "fla-core>=0.4.0",
+    "torch>=2.10.0.dev20251029",
+    "torchao>=0.15.0.dev20251030",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.6,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+prerelease = "allow"
+
+[tool.uv.build-backend]
+module-name = "gpt"
+module-root = ""
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu130" },
+]
+torchao = [
+  { index = "pytorch-cu130" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/nightly/cu130"
