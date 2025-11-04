@@ -1,10 +1,23 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Dataset:
+    path: str = "keatone/TinierStories"
+    split: str = "train"
+    name: str | None = None
 
 
 @dataclass
 class Data:
-    dataset: str = "keatone/TinierStories"
-    tokenizer_path: str = "gpt/tokenizer"
+    pad_to: int = 2048
+    seq_len: int = 2048
+    column: str = "text"
+    skip_cache: bool = False
+    process_batch_size: int = 100000
+    tokenizer_path: str = "gpt/tokenizer/llama.json"
+    dataset: Dataset = field(default_factory=Dataset)
+
 
 @dataclass
 class Optim:

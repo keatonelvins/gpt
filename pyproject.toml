@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "torchtitan",
+    "pytorch-triton",
     "fla-core>=0.4.0",
     "torch>=2.10.0.dev20251029",
     "torchao>=0.15.0.dev20251030",
@@ -26,14 +27,12 @@ module-name = "gpt"
 module-root = ""
 
 [tool.uv.sources]
-torch = [
-  { index = "pytorch-cu130" },
-]
-torchao = [
-  { index = "pytorch-cu130" },
-]
+torch = { index = "pytorch-cu130" }
+torchao = { index = "pytorch-cu130" }
+pytorch-triton = { index = "pytorch-cu130" }
 torchtitan = { git = "https://github.com/pytorch/torchtitan.git" }
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
 url = "https://download.pytorch.org/whl/nightly/cu130"
+explicit = true

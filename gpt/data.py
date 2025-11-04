@@ -6,16 +6,18 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
 from functools import partial
+from dataclasses import asdict
 from datasets import load_dataset
 from collections import defaultdict, deque
+from tokenizers import Tokenizer
 
-from torchtitan.components.tokenizer import BaseTokenizer
+from gpt.config import Data
 
 
-def encode(examples, tokenizer, column) -> dict:
+def encode(examples, tokenizer, column, eos_token_id) -> dict:
     """Batch tokenize input text."""
-    input_ids = tokenizer.encode_batch(examples[column])
-    return {"input_ids": [ids + [tokenizer.eot_token] for ids in input_ids]}
+    encodings = tokenizer.encode_batch_fast(examples[column])
+    return {"input_ids": [encoding.ids + [eos_token_id] for encoding in encodings]}
 
 
 def build_inputs(batch: dict[str, torch.Tensor], pad_id: int, pad_to: int) -> dict[str, torch.Tensor]:
@@ -29,36 +31,37 @@ def build_inputs(batch: dict[str, torch.Tensor], pad_id: int, pad_to: int) -> di
     return batch
 
 
-def build_dataset(config: dict):
+def build_dataset(config: Data):
     """Tokenize, pack, and convert to tensors. Will load from local cache if available."""
-    tokenizer = BaseTokenizer(config.tokenizer_path)
+    tokenizer = Tokenizer.from_file(config.tokenizer_path)
+    eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
 
     # load -> tokenize -> fast bfd packing -> pad and build labels
     ds = load_dataset(
-        **config.dataset.model_dump(),
+        **asdict(config.dataset),
         num_proc=os.cpu_count(),
         download_mode="force_redownload" if config.skip_cache else None,
     )
-    ds.map(
-        partial(encode, tokenizer=tokenizer, column=config.column),
+    ds = ds.map(
+        partial(encode, tokenizer=tokenizer, column=config.column, eos_token_id=eos_token_id),
         desc="Tokenizing data...",
         batched=True,
         num_proc=os.cpu_count(),
-        batch_size=10000,
+        batch_size=config.process_batch_size,
         remove_columns=ds.column_names,
     )
     ds = ds.map(
         partial(pack, seq_len=config.seq_len),
         desc="Packing data...",
         batched=True,
-        batch_size=100000,
-        num_proc=(len(ds) // 100000) + 1,
+        batch_size=config.process_batch_size,
+        num_proc=(len(ds) // config.process_batch_size) + 1,
         remove_columns=ds.column_names,
     ).with_format("torch")
     ds = ds.map(
-        partial(build_inputs, pad_id=tokenizer.eot_token, pad_to=config.pad_to),
+        partial(build_inputs, pad_id=eos_token_id, pad_to=config.pad_to),
         desc="Building inputs...",
-        num_proc=config.tok_num_proc,
+        num_proc=os.cpu_count(),
         remove_columns=ds.column_names,
     )
 
