@@ -1,0 +1,162 @@
+"""Data loading and preprocessing."""
+
+import os
+import torch
+import tiktoken
+import numpy as np
+import pyarrow as pa
+import pyarrow.compute as pc
+from functools import partial
+from datasets import load_dataset
+from collections import defaultdict, deque
+from datasets.distributed import split_dataset_by_node
+
+from gpt.utils import get_rank, get_world_size
+
+
+def encode(examples, tokenizer, column) -> dict:
+    """Batch tokenize input text."""
+    input_ids = tokenizer.encode_batch(examples[column])
+    return {"input_ids": [ids + [tokenizer.eot_token] for ids in input_ids]}
+
+
+def build_inputs(batch: dict[str, torch.Tensor], pad_id: int, pad_to: int) -> dict[str, torch.Tensor]:
+    """Pad tensors to multiple of pad_to and build labels column w/ appropriate masking."""
+    labels = batch["input_ids"].clone()
+    labels[batch["position_ids"] == 0] = -100  # mask boundary tokens
+    batch["input_ids"] = pad(batch["input_ids"], pad_id=pad_id, pad_to=pad_to)
+    batch["position_ids"] = pad(batch["position_ids"], pad_id=0, pad_to=pad_to)
+    batch["labels"] = pad(labels, pad_id=-100, pad_to=pad_to)
+
+    return batch
+
+
+class PackedDataset:
+    def __init__(self, config: dict):
+        self._dataset = self._build_dataset(config)
+        self.dataset = split_dataset_by_node(self._dataset, get_rank(), get_world_size())
+
+    def _build_dataset(self, config: dict):
+        """Tokenize, pack, and convert to tensors. Will load from local cache if available."""
+        tokenizer = tiktoken.get_encoding("o200k_base")
+
+        # load -> tokenize -> fast bfd packing -> pad and build labels
+        ds = load_dataset(
+            **config.dataset.model_dump(),
+            num_proc=config.tok_num_proc,
+            download_mode="force_redownload" if config.skip_cache else None,
+        )
+        ds.map(
+            partial(encode, tokenizer=tokenizer, column=config.column),
+            desc=f"Tokenizing data with (bs={config.tok_bs})",
+            batched=True,
+            num_proc=os.cpu_count(),
+            batch_size=config.tok_bs,
+            remove_columns=ds.column_names,
+        )
+        ds = ds.map(
+            partial(pack, seq_len=config.seq_len),
+            desc=f"Packing data with (bs={config.pack_bs})",
+            batched=True,
+            batch_size=config.pack_bs,
+            num_proc=(len(ds) // config.pack_bs) + 1,
+            remove_columns=ds.column_names,
+        ).with_format("torch")
+        ds = ds.map(
+            partial(build_inputs, pad_id=tokenizer.eot_token, pad_to=config.pad_to),
+            desc=f"Building inputs with (pad_to={config.pad_to})",
+            num_proc=config.tok_num_proc,
+            remove_columns=ds.column_names,
+        )
+
+        return ds
+
+
+class IntSucc:
+    """Find next greater integer in a set of integers."""
+
+    __slots__ = ("N", "bits")
+
+    def __init__(self, maxval: int):
+        assert maxval >= 1
+        self.N, self.bits = maxval, 0
+
+    def add(self, i: int):
+        self.bits |= 1 << (i - 1)
+
+    def discard(self, i: int):
+        self.bits &= ~(1 << (i - 1))
+
+    def next_geq(self, x: int) -> int:
+        y = self.bits >> (x - 1)
+        assert y, "no successor present (missing sentinel?)"
+        return x + ((y & -y).bit_length() - 1)
+
+
+def take(arr, idx):
+    """Take elements from a pyarrow array based on indices."""
+    idx = np.asarray(idx, dtype=np.int32)
+    out = pc.take(arr, pa.array(idx, type=pa.int32()))
+    return out.combine_chunks() if isinstance(out, pa.ChunkedArray) else out
+
+
+def pack(examples: pa.Table, seq_len: int) -> pa.Table:
+    """Pack examples into sequences up to seq_len."""
+    ids = pc.list_slice(examples["input_ids"], 0, seq_len)
+    lens = pc.list_value_length(ids).to_numpy()
+    order = np.argsort(-lens)
+
+    succ = IntSucc(seq_len)
+    succ.add(seq_len)  # sentinel enables new bins
+    by_space = defaultdict(deque)  # space -> deque[bins]
+    bins = []  # each: {"ids": [...], "len": int}
+
+    for i in order:
+        L = int(lens[i])
+        if not L:
+            continue
+        s = succ.next_geq(L)
+        b = by_space[s].popleft() if s < seq_len else {"ids": [], "len": 0}
+        if s < seq_len and not by_space[s]:
+            succ.discard(s)
+        b["ids"].append(int(i))
+        b["len"] += L
+        if s == seq_len:
+            bins.append(b)
+        ns = s - L
+        by_space[ns].append(b)
+        if ns:
+            succ.add(ns)
+
+    reorder = [j for b in bins for j in b["ids"]]
+    ids_taken = take(ids, reorder)
+
+    # offsets (match ListArray vs LargeListArray via dtype)
+    tok_counts = [b["len"] for b in bins]
+    odtype = ids_taken.offsets.type.to_pandas_dtype()
+    offs = np.cumsum([0] + tok_counts, dtype=odtype)
+
+    LA = type(ids_taken)
+    packed_ids = LA.from_arrays(offs, ids_taken.values)
+
+    # position_ids: reset to 0 at each original example boundary
+    dl = lens[reorder]
+    T = int(offs[-1])
+    pos = np.ones(T, dtype=np.int32)
+    pos[0] = 0
+    if dl.size > 1:
+        cut = dl[:-1].cumsum()
+        pos[cut] = -(dl[:-1] - 1)
+    pos = pos.cumsum()
+    position_ids = LA.from_arrays(offs, pa.array(pos, type=pa.int32()))
+
+    return pa.Table.from_arrays([packed_ids, position_ids], names=["input_ids", "position_ids"])
+
+
+def pad(t: torch.Tensor, pad_id: int, pad_to: int) -> torch.Tensor:
+    """Pad a 1D tensor to the next multiple of pad_to."""
+    remainder = t.size(0) % pad_to
+    if remainder == 0:
+        return t
+    pad_len = pad_to - remainder
+    return torch.cat((t, torch.full((pad_len,), pad_id, dtype=t.dtype, device=t.device)))

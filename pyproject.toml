@@ -8,8 +8,10 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "torchtitan",
     "datasets>=4.0.0",
     "fla-core>=0.4.0",
+    "tiktoken>=0.11.0",
     "torch>=2.10.0.dev20251029",
     "torchao>=0.15.0.dev20251030",
 ]
@@ -32,6 +34,7 @@ torch = [
 torchao = [
   { index = "pytorch-cu130" },
 ]
+torchtitan = { git = "https://github.com/pytorch/torchtitan.git" }
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
