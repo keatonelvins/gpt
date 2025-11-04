@@ -1,3 +1,4 @@
+"""adapted from https://github.com/microsoft/dion"""
 
 import torch
 from torch import Tensor

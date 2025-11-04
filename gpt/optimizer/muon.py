@@ -1,3 +1,5 @@
+"""adapted from https://github.com/microsoft/dion"""
+
 import math
 from collections.abc import Callable, Generator
 from itertools import chain

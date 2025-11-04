@@ -1,3 +1,5 @@
+"""adapted from https://github.com/microsoft/dion"""
+
 import torch
 import triton
 import triton.language as tl

@@ -1,3 +1,5 @@
+"""adapted from https://github.com/microsoft/dion"""
+
 from collections import defaultdict
 from collections.abc import Generator
 from typing import Optional
