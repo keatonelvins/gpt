@@ -10,13 +10,13 @@ class Dataset:
 
 @dataclass
 class Data:
-    pad_to: int = 2048
+    dataset: Dataset = field(default_factory=Dataset)
+    tokenizer_path: str = "gpt/tokenizer/llama.json"
     seq_len: int = 2048
+    pad_to: int = 2048
     column: str = "text"
     skip_cache: bool = False
     process_batch_size: int = 100000
-    tokenizer_path: str = "gpt/tokenizer/llama.json"
-    dataset: Dataset = field(default_factory=Dataset)
 
 
 @dataclass
@@ -36,11 +36,8 @@ class Trainer:
 
 @dataclass
 class Config:
-    data: Data
-    model: Model
-    optim: Optim
-    trainer: Trainer
+    data: Data = field(default_factory=Data)
+    model: Model = field(default_factory=Model)
+    optim: Optim = field(default_factory=Optim)
+    trainer: Trainer = field(default_factory=Trainer)
     project: str = "gpt"
-
-
-default_config = Config(Data(), Model(), Optim(), Trainer())

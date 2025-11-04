@@ -1,34 +1,18 @@
 """Data loading and preprocessing."""
 
 import os
-import torch
+from collections import defaultdict, deque
+from dataclasses import asdict
+from functools import partial
+
 import numpy as np
 import pyarrow as pa
 import pyarrow.compute as pc
-from functools import partial
-from dataclasses import asdict
+import torch
 from datasets import load_dataset
-from collections import defaultdict, deque
 from tokenizers import Tokenizer
 
 from gpt.config import Data
-
-
-def encode(examples, tokenizer, column, eos_token_id) -> dict:
-    """Batch tokenize input text."""
-    encodings = tokenizer.encode_batch_fast(examples[column])
-    return {"input_ids": [encoding.ids + [eos_token_id] for encoding in encodings]}
-
-
-def build_inputs(batch: dict[str, torch.Tensor], pad_id: int, pad_to: int) -> dict[str, torch.Tensor]:
-    """Pad tensors to multiple of pad_to and build labels column w/ appropriate masking."""
-    labels = batch["input_ids"].clone()
-    labels[batch["position_ids"] == 0] = -100  # mask boundary tokens
-    batch["input_ids"] = pad(batch["input_ids"], pad_id=pad_id, pad_to=pad_to)
-    batch["position_ids"] = pad(batch["position_ids"], pad_id=0, pad_to=pad_to)
-    batch["labels"] = pad(labels, pad_id=-100, pad_to=pad_to)
-
-    return batch
 
 
 def build_dataset(config: Data):
@@ -58,42 +42,18 @@ def build_dataset(config: Data):
         num_proc=(len(ds) // config.process_batch_size) + 1,
         remove_columns=ds.column_names,
     ).with_format("torch")
-    ds = ds.map(
+    return ds.map(
         partial(build_inputs, pad_id=eos_token_id, pad_to=config.pad_to),
         desc="Building inputs...",
         num_proc=os.cpu_count(),
         remove_columns=ds.column_names,
     )
 
-    return ds
 
-
-class IntSucc:
-    """Find next greater integer in a set of integers."""
-
-    __slots__ = ("N", "bits")
-
-    def __init__(self, maxval: int):
-        assert maxval >= 1
-        self.N, self.bits = maxval, 0
-
-    def add(self, i: int):
-        self.bits |= 1 << (i - 1)
-
-    def discard(self, i: int):
-        self.bits &= ~(1 << (i - 1))
-
-    def next_geq(self, x: int) -> int:
-        y = self.bits >> (x - 1)
-        assert y, "no successor present (missing sentinel?)"
-        return x + ((y & -y).bit_length() - 1)
-
-
-def take(arr, idx):
-    """Take elements from a pyarrow array based on indices."""
-    idx = np.asarray(idx, dtype=np.int32)
-    out = pc.take(arr, pa.array(idx, type=pa.int32()))
-    return out.combine_chunks() if isinstance(out, pa.ChunkedArray) else out
+def encode(examples, tokenizer, column, eos_token_id) -> dict:
+    """Batch tokenize input text."""
+    encodings = tokenizer.encode_batch_fast(examples[column])
+    return {"input_ids": [encoding.ids + [eos_token_id] for encoding in encodings]}
 
 
 def pack(examples: pa.Table, seq_len: int) -> pa.Table:
@@ -156,3 +116,42 @@ def pad(t: torch.Tensor, pad_id: int, pad_to: int) -> torch.Tensor:
         return t
     pad_len = pad_to - remainder
     return torch.cat((t, torch.full((pad_len,), pad_id, dtype=t.dtype, device=t.device)))
+
+
+def build_inputs(batch: dict[str, torch.Tensor], pad_id: int, pad_to: int) -> dict[str, torch.Tensor]:
+    """Pad tensors to multiple of pad_to and build labels column w/ appropriate masking."""
+    labels = batch["input_ids"].clone()
+    labels[batch["position_ids"] == 0] = -100  # mask boundary tokens
+    batch["input_ids"] = pad(batch["input_ids"], pad_id=pad_id, pad_to=pad_to)
+    batch["position_ids"] = pad(batch["position_ids"], pad_id=0, pad_to=pad_to)
+    batch["labels"] = pad(labels, pad_id=-100, pad_to=pad_to)
+
+    return batch
+
+
+class IntSucc:
+    """Find next greater integer in a set of integers."""
+
+    __slots__ = ("N", "bits")
+
+    def __init__(self, maxval: int):
+        assert maxval >= 1
+        self.N, self.bits = maxval, 0
+
+    def add(self, i: int):
+        self.bits |= 1 << (i - 1)
+
+    def discard(self, i: int):
+        self.bits &= ~(1 << (i - 1))
+
+    def next_geq(self, x: int) -> int:
+        y = self.bits >> (x - 1)
+        assert y, "no successor present (missing sentinel?)"
+        return x + ((y & -y).bit_length() - 1)
+
+
+def take(arr, idx):
+    """Take elements from a pyarrow array based on indices."""
+    idx = np.asarray(idx, dtype=np.int32)
+    out = pc.take(arr, pa.array(idx, type=pa.int32()))
+    return out.combine_chunks() if isinstance(out, pa.ChunkedArray) else out
