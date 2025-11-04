@@ -216,9 +216,7 @@ name = "gpt"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "datasets" },
     { name = "fla-core" },
-    { name = "tiktoken" },
     { name = "torch" },
     { name = "torchao" },
     { name = "torchtitan" },
@@ -226,9 +224,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "datasets", specifier = ">=4.0.0" },
     { name = "fla-core", specifier = ">=0.4.0" },
-    { name = "tiktoken", specifier = ">=0.11.0" },
     { name = "torch", specifier = ">=2.10.0.dev20251029", index = "https://download.pytorch.org/whl/nightly/cu130" },
     { name = "torchao", specifier = ">=0.15.0.dev20251030", index = "https://download.pytorch.org/whl/nightly/cu130" },
     { name = "torchtitan", git = "https://github.com/pytorch/torchtitan.git" },
@@ -814,31 +810,6 @@ wheels = [
 ]
 
 [[package]]
-name = "regex"
-version = "2025.9.1"
-source = { registry = "https://download.pytorch.org/whl/nightly/cu130" }
-wheels = [
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-macosx_10_13_universal2.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-macosx_10_13_x86_64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-macosx_11_0_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-win_amd64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp313-cp313-win_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-macosx_10_13_universal2.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-macosx_10_13_x86_64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-macosx_11_0_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-manylinux2014_ppc64le.manylinux_2_17_ppc64le.manylinux_2_28_ppc64le.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-manylinux2014_s390x.manylinux_2_17_s390x.manylinux_2_28_s390x.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-win_amd64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/regex-2025.9.1-cp314-cp314-win_arm64.whl" },
-]
-
-[[package]]
 name = "requests"
 version = "2.32.4"
 source = { registry = "https://download.pytorch.org/whl/nightly/cu130" }
@@ -917,22 +888,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/7a/13/e503968fefabd4c6b2650af21e110aa8466fe21432cd7c43a84577a89438/tensorboard_data_server-0.7.2-py3-none-any.whl", hash = "sha256:7e0610d205889588983836ec05dc098e80f97b7e7bbff7e994ebb78f578d0ddb", size = 2356, upload-time = "2023-10-23T21:23:32.16Z" },
     { url = "https://files.pythonhosted.org/packages/b7/85/dabeaf902892922777492e1d253bb7e1264cadce3cea932f7ff599e53fea/tensorboard_data_server-0.7.2-py3-none-macosx_10_9_x86_64.whl", hash = "sha256:9fe5d24221b29625dbc7328b0436ca7fc1c23de4acf4d272f1180856e32f9f60", size = 4823598, upload-time = "2023-10-23T21:23:33.714Z" },
     { url = "https://files.pythonhosted.org/packages/73/c6/825dab04195756cf8ff2e12698f22513b3db2f64925bdd41671bfb33aaa5/tensorboard_data_server-0.7.2-py3-none-manylinux_2_31_x86_64.whl", hash = "sha256:ef687163c24185ae9754ed5650eb5bc4d84ff257aabdc33f0cc6f74d8ba54530", size = 6590363, upload-time = "2023-10-23T21:23:35.583Z" },
-]
-
-[[package]]
-name = "tiktoken"
-version = "0.11.0"
-source = { registry = "https://download.pytorch.org/whl/nightly/cu130" }
-dependencies = [
-    { name = "regex" },
-    { name = "requests" },
-]
-wheels = [
-    { url = "https://download.pytorch.org/whl/nightly/tiktoken-0.11.0-cp313-cp313-macosx_10_13_x86_64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/tiktoken-0.11.0-cp313-cp313-macosx_11_0_arm64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/tiktoken-0.11.0-cp313-cp313-manylinux_2_17_aarch64.manylinux2014_aarch64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/tiktoken-0.11.0-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" },
-    { url = "https://download.pytorch.org/whl/nightly/tiktoken-0.11.0-cp313-cp313-win_amd64.whl" },
 ]
 
 [[package]]

@@ -1,17 +1,33 @@
 from dataclasses import dataclass
 
-@dataclass
-class Dataset:
-    path: str = "keatone/TinierStories"
-    split: str = "train"
-    name: str = None
-    data_dir: str = None
-    data_files: str = None
 
 @dataclass
 class Data:
-    dataset: Dataset = Dataset()
-    column: str = "text"
-    tok_bs: int = 10000
-    pack_bs: int = 100000
-    skip_cache: bool = False
+    dataset: str = "keatone/TinierStories"
+    tokenizer_path: str = "gpt/tokenizer"
+
+@dataclass
+class Optim:
+    lr: float = 3e-4
+
+
+@dataclass
+class Model:
+    d: int = 1024
+
+
+@dataclass
+class Trainer:
+    steps: int = 100000
+
+
+@dataclass
+class Config:
+    data: Data
+    model: Model
+    optim: Optim
+    trainer: Trainer
+    project: str = "gpt"
+
+
+default_config = Config(Data(), Model(), Optim(), Trainer())
