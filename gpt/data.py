@@ -12,10 +12,10 @@ import torch
 from datasets import load_dataset
 from tokenizers import Tokenizer
 
-from gpt.config import Data
+from gpt.config import DataConfig
 
 
-def build_dataset(config: Data):
+def build_dataset(config: DataConfig):
     """Tokenize, pack, and convert to tensors. Will load from local cache if available."""
     tokenizer = Tokenizer.from_file(config.tokenizer_path)
     eos_token_id = tokenizer.token_to_id("<|end_of_text|>")

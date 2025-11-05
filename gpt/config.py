@@ -2,15 +2,15 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class Dataset:
+class DatasetConfig:
     path: str = "keatone/TinierStories"
     split: str = "train"
     name: str | None = None
 
 
 @dataclass
-class Data:
-    dataset: Dataset = field(default_factory=Dataset)
+class DataConfig:
+    dataset: DatasetConfig = field(default_factory=DatasetConfig)
     tokenizer_path: str = "gpt/tokenizer/llama.json"
     seq_len: int = 2048
     pad_to: int = 2048
@@ -20,24 +20,35 @@ class Data:
 
 
 @dataclass
-class Optim:
+class OptimConfig:
     lr: float = 3e-4
 
 
 @dataclass
-class Model:
-    d: int = 1024
+class AttnConfig:
+    num_heads: int = 16
+    rope_theta: float = 10000.0
+    layers: list[int] = field(default_factory=list)
 
 
 @dataclass
-class Trainer:
+class ModelConfig:
+    hidden_size: int = 1024
+    head_dim: int = 128
+    num_heads: int = 16
+    norm_eps: float = 1e-6
+    attn: AttnConfig = field(default_factory=AttnConfig)
+
+
+@dataclass
+class TrainerConfig:
     steps: int = 100000
 
 
 @dataclass
 class Config:
-    data: Data = field(default_factory=Data)
-    model: Model = field(default_factory=Model)
-    optim: Optim = field(default_factory=Optim)
-    trainer: Trainer = field(default_factory=Trainer)
+    data: DataConfig = field(default_factory=DataConfig)
+    model: ModelConfig = field(default_factory=ModelConfig)
+    optim: OptimConfig = field(default_factory=OptimConfig)
+    trainer: TrainerConfig = field(default_factory=TrainerConfig)
     project: str = "gpt"

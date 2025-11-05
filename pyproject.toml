@@ -12,9 +12,9 @@ dependencies = [
     "ruff>=0.14.3",
     "triton>=3.5.0",
     "pytorch-triton",
-    "fla-core>=0.4.0",
     "torch>=2.10.0.dev20251029",
     "torchao>=0.15.0.dev20251030",
+    "flash-linear-attention>=0.4.0",
 ]
 
 [build-system]
