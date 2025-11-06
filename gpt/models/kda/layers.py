@@ -4,8 +4,7 @@ import torch
 import torch.nn as nn
 from fla.layers.attn import Attention
 from fla.layers.kda import KimiDeltaAttention
-from fla.modules import GatedMLP as KDAMLP
-from fla.modules import RMSNorm
+from fla.modules import GatedMLP, RMSNorm
 
 from gpt.config import ModelConfig
 
@@ -31,7 +30,7 @@ class KDABlock(nn.Module):
                 layer_idx=layer_idx,
             )
         self.mlp_norm = RMSNorm(config.hidden_size, eps=config.norm_eps)
-        self.mlp = KDAMLP(hidden_size=config.hidden_size)
+        self.mlp = GatedMLP(hidden_size=config.hidden_size)
 
     def forward(
         self,

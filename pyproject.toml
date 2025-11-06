@@ -10,6 +10,7 @@ requires-python = ">=3.13"
 dependencies = [
     "torchtitan",
     "ruff>=0.14.3",
+    "loguru>=0.7.3",
     "triton>=3.5.0",
     "pytorch-triton",
     "torch>=2.10.0.dev20251029",

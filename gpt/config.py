@@ -1,4 +1,5 @@
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -52,3 +53,6 @@ class Config:
     optim: OptimConfig = field(default_factory=OptimConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
     project: str = "gpt"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
