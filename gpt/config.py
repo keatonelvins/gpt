@@ -47,11 +47,21 @@ class TrainerConfig:
 
 
 @dataclass
+class Comm:
+    init_timeout_seconds: int = 300
+    train_timeout_seconds: int = 100
+    trace_buf_size: int = 20000
+    save_traces_folder: str = "comm_traces"
+    save_traces_file_prefix: str = "rank_"
+
+
+@dataclass
 class Config:
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
+    comm: Comm = field(default_factory=Comm)
     project: str = "gpt"
 
     def to_dict(self) -> dict[str, Any]:

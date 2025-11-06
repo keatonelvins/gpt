@@ -2,12 +2,14 @@ import sys
 import tomllib
 from pathlib import Path
 
+from torch.distributed.elastic.multiprocessing.errors import record
 from torchtitan.config.manager import ConfigManager
 
 from gpt.config import Config
 from gpt.train import train
 
 
+@record
 def main():
     config_path = sys.argv[1]
     with Path(config_path).open("rb") as f:
