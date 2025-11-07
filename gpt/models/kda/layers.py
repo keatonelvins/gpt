@@ -11,6 +11,7 @@ from gpt.config import ModelConfig
 
 class KDABlock(nn.Module):
     def __init__(self, config: ModelConfig, layer_idx: int):
+        super().__init__()
         self.config = config
         self.layer_idx = layer_idx
 
@@ -37,10 +38,10 @@ class KDABlock(nn.Module):
         hidden_states: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
         **kwargs: dict[str, Any],
-    ) -> tuple[torch.FloatTensor, tuple[torch.FloatTensor, torch.FloatTensor] | None]:
+    ) -> tuple[torch.FloatTensor, torch.FloatTensor]:
         residual = hidden_states
         hidden_states = self.attn_norm(hidden_states)
-        hidden_states, attentions, past_key_values = self.attn(
+        hidden_states, attentions, _ = self.attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             **kwargs,
@@ -49,4 +50,4 @@ class KDABlock(nn.Module):
         hidden_states = self.mlp(hidden_states, **kwargs)
         hidden_states = residual + hidden_states
 
-        return (hidden_states, attentions, past_key_values)
+        return hidden_states, attentions

@@ -1,9 +1,6 @@
-"""Distributed checkpoint saving and loading."""
-
 from pathlib import Path
 from typing import Any
 
-import torch
 import torch.distributed.checkpoint as dcp
 from loguru import logger
 from torch.distributed.checkpoint.state_dict import (
@@ -12,7 +9,7 @@ from torch.distributed.checkpoint.state_dict import (
     set_state_dict,
 )
 from torch.distributed.checkpoint.stateful import Stateful
-from torch.optim.lr_scheduler import LRScheduler
+from torch.nn import Module
 from torch.optim.optimizer import Optimizer
 
 from gpt.config import Config
@@ -22,73 +19,34 @@ from gpt.config import Config
 class TrainerState(Stateful):
     """Stateful tracker for saving/loading checkpoints."""
 
-    def __init__(
-        self,
-        model: torch.nn.Module,
-        optimizer: Optimizer,
-        scheduler: LRScheduler | None = None,
-        dataloader: StatefulDataLoader | None = None,
-        step: int = 0,
-    ):
-        self.step = step
+    def __init__(self, model: Module, optim: Optimizer):
         self.model = model
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.dataloader = dataloader
+        self.optim = optim
 
     def state_dict(self) -> dict[str, Any]:
-        state_dict = {"step": self.step}
-        state_dict["model"], state_dict["optimizer"] = get_state_dict(
-            self.model, self.optimizer, options=StateDictOptions(cpu_offload=True),
-        )
-
-        if self.scheduler is not None:
-            state_dict["scheduler"] = self.scheduler.state_dict()
-        if self.dataloader is not None:
-            state_dict["dataloader"] = self.dataloader.state_dict()
-
-        return state_dict
+        model, optim = get_state_dict(self.model, self.optim, options=StateDictOptions(cpu_offload=True))
+        return {
+            "model": model,
+            "optim": optim,
+        }
 
     def load_state_dict(self, state_dict: dict[str, Any]):
-        self.step = state_dict.get("step", 0)
-
         set_state_dict(
             self.model,
-            self.optimizer,
+            self.optim,
             model_state_dict=state_dict["model"],
-            optim_state_dict=state_dict["optimizer"],
+            optim_state_dict=state_dict["optim"],
         )
 
-        if "scheduler" in state_dict and self.scheduler is not None:
-            self.scheduler.load_state_dict(state_dict["scheduler"])
-        if "dataloader" in state_dict and self.dataloader is not None:
-            self.dataloader.load_state_dict(state_dict["dataloader"])
 
-
-def save_checkpoint(
-    step: int,
-    config: Config,
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
-    scheduler: torch.optim.lr_scheduler.LRScheduler | None,
-    dataloader: StatefulDataLoader | None,
-) -> None:
-    """Save checkpoint: resumable DCP or model-only safetensors."""
+def save_checkpoint(step: int, config: Config, model: Module, optim: Optimizer) -> None:
+    """Save resumable DCP checkpoint."""
     path = config.ckpt.save_dir / f"step_{step}"
     logger.info(f"Saving checkpoint to {path}")
-
-    trainer_state = TrainerState(model, optimizer, scheduler, dataloader, step)
-    dcp.save({"trainer": trainer_state}, checkpoint_id=str(path))
+    dcp.save({"trainer": TrainerState(model, optim)}, checkpoint_id=str(path))
 
 
-def load_checkpoint(
-    path: Path,
-    model: torch.nn.Module,
-    optimizer: torch.optim.Optimizer,
-    scheduler: torch.optim.lr_scheduler.LRScheduler | None,
-    dataloader: StatefulDataLoader | None,
-) -> int:
-    """Load trainer state from DCP checkpoint (scheduler and dataloader can be skipped)."""
-    trainer_state = TrainerState(model, optimizer, scheduler, dataloader)
+def load_checkpoint(path: Path, model: Module, optim: Optimizer) -> None:
+    """Load trainer state from DCP checkpoint."""
+    trainer_state = TrainerState(model, optim)
     dcp.load({"trainer": trainer_state}, checkpoint_id=str(path))
-    return trainer_state.step

@@ -1,5 +1,3 @@
-"""Data loading and preprocessing."""
-
 import os
 from collections import defaultdict, deque
 from dataclasses import asdict
@@ -15,11 +13,8 @@ from tokenizers import Tokenizer
 from gpt.config import DataConfig
 
 
-def build_dataset(config: DataConfig):
+def build_dataset(config: DataConfig, tokenizer: Tokenizer, eos_token_id: int):
     """Tokenize, pack, and convert to tensors. Will load from local cache if available."""
-    tokenizer = Tokenizer.from_file(config.tokenizer_path)
-    eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
-
     # load -> tokenize -> fast bfd packing -> pad and build labels
     ds = load_dataset(
         **asdict(config.dataset),

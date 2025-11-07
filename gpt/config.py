@@ -4,7 +4,7 @@ from typing import Any
 
 @dataclass
 class DatasetConfig:
-    path: str = "keatone/TinierStories"
+    path: str = "karpathy/fineweb-edu-100b-shuffle"
     split: str = "train"
     name: str | None = None
 
@@ -17,7 +17,14 @@ class DataConfig:
     pad_to: int = 2048
     column: str = "text"
     skip_cache: bool = False
-    process_batch_size: int = 100000
+    process_batch_size: int = 1000000
+    streaming: bool = True
+
+
+@dataclass
+class DistributedConfig:
+    dp_replicate: int = 1
+    dp_shard: int = -1
 
 
 @dataclass
@@ -60,8 +67,10 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
+    dist: DistributedConfig = field(default_factory=DistributedConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
     comm: Comm = field(default_factory=Comm)
+
     project: str = "gpt"
 
     def to_dict(self) -> dict[str, Any]:
