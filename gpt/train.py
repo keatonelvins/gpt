@@ -1,4 +1,5 @@
 import os
+from contextlib import nullcontext
 from pathlib import Path
 
 import torch
@@ -56,6 +57,10 @@ class Trainer:
             for block in self.model.layers:
                 fully_shard(block, mesh=self.mesh, mp_policy=mp_policy)
             fully_shard(self.model, mesh=self.mesh, mp_policy=mp_policy, reshard_after_forward=False)
+            self.amp_manager = nullcontext()
+        else:
+            param_dtype = getattr(torch, config.trainer.param_dtype)
+            self.amp_manager = torch.autocast(device_type, dtype=param_dtype)
 
         self.optimizer = Muon(
             self.model.parameters(),
@@ -70,7 +75,8 @@ class Trainer:
 
     def forward_backward(self, batch):
         batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
-        loss = self.model(**batch)
+        with self.amp_manager:
+            loss = self.model(**batch)
         loss.backward()
         return loss
 
