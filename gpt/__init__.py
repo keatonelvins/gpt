@@ -2,11 +2,15 @@ import sys
 import tomllib
 from pathlib import Path
 
+from kernels import get_kernel
 from torch.distributed.elastic.multiprocessing.errors import record
 from torchtitan.config.manager import ConfigManager
 
-from gpt.config import Config
-from gpt.train import train
+flash_attn = get_kernel("kernels-community/flash-attn2")
+sys.modules["flash_attn"] = flash_attn
+
+from gpt.config import Config  # noqa: E402
+from gpt.train import train  # noqa: E402
 
 
 @record

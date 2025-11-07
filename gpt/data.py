@@ -15,7 +15,6 @@ from gpt.config import DataConfig
 
 def build_dataset(config: DataConfig, tokenizer: Tokenizer, eos_token_id: int):
     """Tokenize, pack, and convert to tensors. Will load from local cache if available."""
-    # load -> tokenize -> fast bfd packing -> pad and build labels
     ds = load_dataset(
         **asdict(config.dataset),
         num_proc=os.cpu_count(),
@@ -81,16 +80,10 @@ def pack(examples: pa.Table, seq_len: int) -> pa.Table:
 
     reorder = [j for b in bins for j in b["ids"]]
     ids_taken = take(ids, reorder)
-
-    # offsets (match ListArray vs LargeListArray via dtype)
     tok_counts = [b["len"] for b in bins]
-    odtype = ids_taken.offsets.type.to_pandas_dtype()
-    offs = np.cumsum([0] + tok_counts, dtype=odtype)
-
+    offs = np.cumsum([0] + tok_counts, dtype=ids_taken.offsets.type.to_pandas_dtype())
     LA = type(ids_taken)
     packed_ids = LA.from_arrays(offs, ids_taken.values)
-
-    # position_ids: reset to 0 at each original example boundary
     dl = lens[reorder]
     T = int(offs[-1])
     pos = np.ones(T, dtype=np.int32)

@@ -42,6 +42,7 @@ class AttnConfig:
 @dataclass
 class ModelConfig:
     hidden_size: int = 1024
+    num_layers: int = 24
     head_dim: int = 128
     num_heads: int = 16
     norm_eps: float = 1e-6

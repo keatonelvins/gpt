@@ -10,11 +10,11 @@ requires-python = ">=3.13"
 dependencies = [
     "torchtitan",
     "ruff>=0.14.3",
+    "torch>=2.9.0",
     "loguru>=0.7.3",
     "triton>=3.5.0",
-    "pytorch-triton",
-    "torch>=2.10.0.dev20251029",
-    "torchao>=0.15.0.dev20251030",
+    "torchao>=0.14.1",
+    "kernels>=0.11.0",
     "flash-linear-attention>=0.4.0",
 ]
 
@@ -35,12 +35,12 @@ module-root = ""
 [tool.uv.sources]
 torch = { index = "pytorch-cu130" }
 torchao = { index = "pytorch-cu130" }
-pytorch-triton = { index = "pytorch-cu130" }
+triton = { index = "pytorch-cu130" }
 torchtitan = { git = "https://github.com/pytorch/torchtitan.git" }
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/nightly/cu130"
+url = "https://download.pytorch.org/whl/cu130"
 explicit = true
 
 [tool.ruff]

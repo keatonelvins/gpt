@@ -30,7 +30,7 @@ def train(config: Config):
     rank, world_size = int(os.getenv('LOCAL_RANK', '0')), int(os.getenv('WORLD_SIZE', '1'))
     device_module.set_device(torch.device(f"{device_type}:{rank}"))
 
-    tokenizer: Tokenizer = Tokenizer.from_file(config.tokenizer_path)
+    tokenizer: Tokenizer = Tokenizer.from_file(config.data.tokenizer_path)
     eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
     config.model.vocab_size = tokenizer.get_vocab_size()
 
