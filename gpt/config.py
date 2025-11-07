@@ -1,5 +1,5 @@
 from dataclasses import asdict, dataclass, field
-from typing import Any
+from typing import Any, Literal
 
 from tokenizers import Tokenizer
 
@@ -32,6 +32,7 @@ class DistributedConfig:
 @dataclass
 class OptimConfig:
     lr: float = 3e-4
+    weight_decay: float = 0.1
     max_norm: float = 1.0
 
 
@@ -57,6 +58,15 @@ class ModelConfig:
 class TrainerConfig:
     steps: int = 100000
     log_every: int = 10
+    param_dtype: Literal["bfloat16", "float32"] = "bfloat16"
+    reduce_dtype: Literal["float32"] = "float32"
+
+
+@dataclass
+class Debug:
+    seed: int = 42
+    deterministic: bool = False
+    deterministic_warn_only: bool = False
 
 
 @dataclass
@@ -84,6 +94,7 @@ class Config:
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
     ckpt: CheckpointConfig = field(default_factory=CheckpointConfig)
     comm: Comm = field(default_factory=Comm)
+    debug: Debug = field(default_factory=Debug)
 
     project: str = "gpt"
 
