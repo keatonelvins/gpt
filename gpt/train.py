@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import torch
 from loguru import logger
@@ -10,70 +11,98 @@ from torch.distributed._composable.fsdp import (
 from torch.distributed.device_mesh import init_device_mesh
 from torchtitan.components.metrics import build_device_memory_monitor
 from torchtitan.distributed import utils as dist_utils
+from torchtitan.distributed.utils import clip_grad_norm_ as clip
 from torchtitan.tools import utils
 
+from gpt.ckpt import load_checkpoint, save_checkpoint
 from gpt.config import Config
 from gpt.data import build_dataset
 from gpt.models.gpt import GPT
 from gpt.optimizer import Muon
-from gpt.utils import setup_logger
 
 
-@logger.catch(reraise=True)
-def train(config: Config):
-    setup_logger()
+class Trainer:
+    def __init__(self, config: Config):
+        self.step = 0
+        self.config = config
 
-    _ = utils.GarbageCollection()
-    device_memory_monitor = build_device_memory_monitor()
-    _ = utils.get_peak_flops(device_memory_monitor.device_name)
-    device_module, device_type = utils.device_module, utils.device_type
-    rank, world_size = int(os.getenv('LOCAL_RANK', '0')), int(os.getenv('WORLD_SIZE', '1'))
-    device_module.set_device(torch.device(f"{device_type}:{rank}"))
+        _ = utils.GarbageCollection()
+        device_memory_monitor = build_device_memory_monitor()
+        _ = utils.get_peak_flops(device_memory_monitor.device_name)
 
-    tokenizer: Tokenizer = Tokenizer.from_file(config.data.tokenizer_path)
-    eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
-    config.model.vocab_size = tokenizer.get_vocab_size()
+        self.device_module = utils.device_module
+        self.device_type = utils.device_type
+        self.rank = int(os.getenv('LOCAL_RANK', '0'))
+        self.world_size = int(os.getenv('WORLD_SIZE', '1'))
+        self.device_module.set_device(torch.device(f"{self.device_type}:{self.rank}"))
+        self.device = self.device_module.current_device()
 
-    dataset = build_dataset(config.data, tokenizer, eos_token_id)
-    logger.info(f"Built dataset with {len(dataset)} samples")
-    dataset = dataset.to_iterable_dataset(num_shards=world_size)
-    dataset = dataset.shard(num_shards=world_size, index=rank).batch(batch_size=1)
+        tokenizer: Tokenizer = Tokenizer.from_file(config.data.tokenizer_path)
+        eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
 
-    model = GPT(config.model)
+        ds = build_dataset(config.data, tokenizer, eos_token_id)
+        ds = ds.to_iterable_dataset(num_shards=self.world_size)
+        self.dataset = ds.shard(num_shards=self.world_size, index=self.rank).batch(batch_size=1)
 
-    if world_size > 1:
-        dist_utils.init_distributed(config.comm)
-        dp_replicate, dp_shard = config.dist.dp_replicate, config.dist.dp_shard
+        self.model = GPT(config.model)
 
-        mesh = init_device_mesh("cuda", [dp_replicate, dp_shard], mesh_dim_names=["dp_replicate", "dp_shard"])
-        mesh["dp_replicate", "dp_shard"]._flatten(mesh_dim_name="dp")
+        if self.world_size > 1:
+            dist_utils.init_distributed(config.comm)
+            dp_replicate, dp_shard = config.dist.dp_replicate, config.dist.dp_shard
 
-        fsdp_kwargs = {
-            "mesh": mesh,
-            "mp_policy": MixedPrecisionPolicy(param_dtype=torch.bfloat16, reduce_dtype=torch.float32),
-        }
+            self.mesh = init_device_mesh("cuda", [dp_replicate, dp_shard], mesh_dim_names=["dp_replicate", "dp_shard"])
+            self.mesh["dp_replicate", "dp_shard"]._flatten(mesh_dim_name="dp")
 
-        for block in model.layers:
-            fully_shard(block, **fsdp_kwargs)
+            fsdp_kwargs = {
+                "mesh": self.mesh,
+                "mp_policy": MixedPrecisionPolicy(param_dtype=torch.bfloat16, reduce_dtype=torch.float32),
+            }
 
-        fully_shard(model, reshard_after_forward=False, **fsdp_kwargs)
-    else:
-        mesh = None
+            for block in self.model.layers:
+                fully_shard(block, **fsdp_kwargs)
 
-    optimizer = Muon(
-        model.parameters(),
-        distributed_mesh=mesh,
-        lr=config.optim.lr,
-    )
+            fully_shard(self.model, reshard_after_forward=False, **fsdp_kwargs)
+        else:
+            self.mesh = None
 
-    for step, batch in enumerate(dataset):
-        if step >= config.trainer.steps:
-            break
+        self.optimizer = Muon(
+            self.model.parameters(),
+            distributed_mesh=self.mesh,
+            lr=config.optim.lr,
+        )
 
-        batch = {k: v.to(device_module.current_device(), non_blocking=True) for k, v in batch.items()}
-        loss = model(**batch)
+        if config.ckpt.resume_from:
+            load_checkpoint(Path(config.ckpt.resume_from), self.model, self.optimizer)
+            logger.info(f"Resumed from {config.ckpt.resume_from}")
+
+    def forward_backward(self, batch):
+        batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
+        loss = self.model(**batch)
         loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
+        return loss
 
-    return model
+    def optimizer_step(self):
+        grad_norm = clip(self.model.parameters(), self.config.optim.max_norm)
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+        return grad_norm
+
+    def train_step(self, batch):
+        loss = self.forward_backward(batch)
+        grad_norm = self.optimizer_step()
+        self.step += 1
+
+        if self.step % self.config.trainer.log_every == 0:
+            logger.info(f"step={self.step} loss={loss.item():.4f} grad_norm={grad_norm.item():.4f}")
+
+        if self.step % self.config.ckpt.save_every == 0:
+            save_checkpoint(self.step, self.config, self.model, self.optimizer)
+
+        return loss
+
+    def train(self):
+        for batch in self.dataset:
+            if self.step >= self.config.trainer.steps:
+                break
+            self.train_step(batch)
+        return self.model

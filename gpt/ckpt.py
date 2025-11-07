@@ -41,7 +41,7 @@ class TrainerState(Stateful):
 
 def save_checkpoint(step: int, config: Config, model: Module, optim: Optimizer) -> None:
     """Save resumable DCP checkpoint."""
-    path = config.ckpt.save_dir / f"step_{step}"
+    path = Path(config.ckpt.save_dir) / f"step_{step}"
     logger.info(f"Saving checkpoint to {path}")
     dcp.save({"trainer": TrainerState(model, optim)}, checkpoint_id=str(path))
 

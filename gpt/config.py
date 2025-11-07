@@ -1,6 +1,8 @@
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from tokenizers import Tokenizer
+
 
 @dataclass
 class DatasetConfig:
@@ -30,6 +32,7 @@ class DistributedConfig:
 @dataclass
 class OptimConfig:
     lr: float = 3e-4
+    max_norm: float = 1.0
 
 
 @dataclass
@@ -46,12 +49,21 @@ class ModelConfig:
     head_dim: int = 128
     num_heads: int = 16
     norm_eps: float = 1e-6
+    vocab_size: int | None = None
     attn: AttnConfig = field(default_factory=AttnConfig)
 
 
 @dataclass
 class TrainerConfig:
     steps: int = 100000
+    log_every: int = 10
+
+
+@dataclass
+class CheckpointConfig:
+    save_dir: str = "weights"
+    save_every: int = 1000
+    resume_from: str | None = None
 
 
 @dataclass
@@ -70,9 +82,15 @@ class Config:
     optim: OptimConfig = field(default_factory=OptimConfig)
     dist: DistributedConfig = field(default_factory=DistributedConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
+    ckpt: CheckpointConfig = field(default_factory=CheckpointConfig)
     comm: Comm = field(default_factory=Comm)
 
     project: str = "gpt"
+
+    def __post_init__(self):
+        if self.model.vocab_size is None:
+            tokenizer = Tokenizer.from_file(self.data.tokenizer_path)
+            self.model.vocab_size = tokenizer.get_vocab_size()
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

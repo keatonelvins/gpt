@@ -2,10 +2,10 @@
 - [x] dataset
 - [ ] train loop
 - [ ] modeling code
-- [ ] optimizer
-- [ ] logger
+- [x] optimizer
+- [x] logger
 - [ ] config
 - [ ] evals
 - [ ] parallelization
-- [ ] checkpointing
+- [x] checkpointing
 - [ ] loss

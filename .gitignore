@@ -10,3 +10,4 @@ wheels/
 .env
 refs/
 comm_traces/
+CLAUDE.md
