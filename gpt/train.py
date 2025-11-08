@@ -7,16 +7,17 @@ from loguru import logger
 from tokenizers import Tokenizer
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy, fully_shard
 from torch.distributed.device_mesh import init_device_mesh
+from torchtitan.components.lr_scheduler import build_lr_schedulers
 from torchtitan.components.metrics import build_device_memory_monitor
 from torchtitan.distributed.utils import clip_grad_norm_ as clip
 from torchtitan.distributed.utils import init_distributed, set_determinism
-from torchtitan.tools.utils import GarbageCollection, device_module, device_type, get_peak_flops
+from torchtitan.tools.utils import GarbageCollection, device_module, device_type, get_peak_flops, set_default_dtype
 
 from gpt.ckpt import load_checkpoint, save_checkpoint
 from gpt.config import Config
 from gpt.data import build_dataset
 from gpt.models.gpt import GPT
-from gpt.optimizer import Muon
+from gpt.optimizer.muon import Muon
 
 
 class Trainer:
@@ -48,25 +49,37 @@ class Trainer:
         ds = build_dataset(config.data, tokenizer, eos_token_id).to_iterable_dataset(num_shards=self.world_size)
         self.dataset = ds.shard(num_shards=self.world_size, index=self.rank).batch(batch_size=1)
 
-        self.model = GPT(config.model)
+        param_dtype = getattr(torch, config.trainer.param_dtype)
+        reduce_dtype = getattr(torch, config.trainer.reduce_dtype)
+
+        with (torch.device("meta"), set_default_dtype(param_dtype)):
+            self.model = GPT(config.model)
 
         if self.mesh is not None:
-            param_dtype = getattr(torch, config.trainer.param_dtype)
-            reduce_dtype = getattr(torch, config.trainer.reduce_dtype)
             mp_policy = MixedPrecisionPolicy(param_dtype=param_dtype, reduce_dtype=reduce_dtype)
             for block in self.model.layers:
                 fully_shard(block, mesh=self.mesh, mp_policy=mp_policy)
             fully_shard(self.model, mesh=self.mesh, mp_policy=mp_policy, reshard_after_forward=False)
             self.amp_manager = nullcontext()
         else:
-            param_dtype = getattr(torch, config.trainer.param_dtype)
             self.amp_manager = torch.autocast(device_type, dtype=param_dtype)
+
+        self.model.to_empty(device=self.device)
+        with torch.no_grad():
+            self.model.init_weights()
+        self.model.train()
 
         self.optimizer = Muon(
             self.model.parameters(),
             distributed_mesh=self.mesh,
             lr=config.optim.lr,
             weight_decay=config.optim.weight_decay,
+        )
+
+        self.scheduler = build_lr_schedulers(
+            [self.optimizer],
+            config.sched,
+            config.trainer.steps,
         )
 
         if config.ckpt.resume_from:
@@ -83,6 +96,7 @@ class Trainer:
     def optimizer_step(self):
         grad_norm = clip(self.model.parameters(), self.config.optim.max_norm)
         self.optimizer.step()
+        self.scheduler.step()
         self.optimizer.zero_grad()
         return grad_norm
 

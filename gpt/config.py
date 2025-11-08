@@ -37,6 +37,14 @@ class OptimConfig:
 
 
 @dataclass
+class SchedulerConfig:
+    warmup_steps: int = 200
+    decay_ratio: float | None = None
+    decay_type: Literal["linear", "sqrt", "cosine"] = "linear"
+    min_lr_factor: float = 0.0
+
+
+@dataclass
 class AttnConfig:
     num_heads: int = 16
     rope_theta: float = 10000.0
@@ -90,6 +98,7 @@ class Config:
     data: DataConfig = field(default_factory=DataConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
+    sched: SchedulerConfig = field(default_factory=SchedulerConfig)
     dist: DistributedConfig = field(default_factory=DistributedConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
     ckpt: CheckpointConfig = field(default_factory=CheckpointConfig)

@@ -6,6 +6,7 @@
 - [x] logger
 - [ ] config
 - [ ] evals
-- [ ] parallelization
+- [x] parallelization
 - [x] checkpointing
 - [ ] loss
+- [x] scheduler

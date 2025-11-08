@@ -54,6 +54,20 @@ class GPT(nn.Module):
         self.norm = RMSNorm(config.hidden_size, eps=config.norm_eps)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
+    def init_weights(self):
+        sigma = 1.0 / (self.config.hidden_size ** 0.5)
+        nn.init.trunc_normal_(self.embeddings.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
+
+        for layer in self.layers:
+            layer.attn_norm.reset_parameters()
+            layer.mlp_norm.reset_parameters()
+            if hasattr(layer.attn, 'rotary'):
+                layer.attn.rotary.reset_parameters()
+
+        self.norm.reset_parameters()
+        sigma = 1.0 / (self.config.hidden_size ** 0.5)
+        nn.init.trunc_normal_(self.lm_head.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
+
     def forward(
         self,
         input_ids: torch.LongTensor,
@@ -61,9 +75,7 @@ class GPT(nn.Module):
         attention_mask: torch.Tensor | None = None,
         **kwargs: dict[str, Any],
     ) -> torch.FloatTensor:
-        embeddings = self.embeddings(input_ids)
-        hidden_states = embeddings + self.position_embeddings(position_ids)
-        hidden_states = self.norm(hidden_states)
+        hidden_states = self.embeddings(input_ids)
         for layer in self.layers:
             hidden_states, _ = layer(hidden_states, attention_mask, **kwargs)
         hidden_states = self.norm(hidden_states)
