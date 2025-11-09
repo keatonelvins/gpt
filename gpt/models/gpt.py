@@ -54,6 +54,11 @@ class GPT(nn.Module):
         self.norm = RMSNorm(config.hidden_size, eps=config.norm_eps)
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
+        self.matrix_params = [p for p in self.layers.parameters() if p.ndim == 2]
+        self.vector_params = [p for p in self.layers.parameters() if p.ndim != 2]
+        self.embed_params  = list(self.embeddings.parameters())
+        self.lm_head_params= list(self.lm_head.parameters())
+
     def init_weights(self):
         sigma = 1.0 / (self.config.hidden_size ** 0.5)
         nn.init.trunc_normal_(self.embeddings.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
@@ -78,5 +83,4 @@ class GPT(nn.Module):
         hidden_states = self.embeddings(input_ids)
         for layer in self.layers:
             hidden_states, _ = layer(hidden_states, attention_mask, **kwargs)
-        hidden_states = self.norm(hidden_states)
-        return self.lm_head(hidden_states)
+        return self.norm(hidden_states)

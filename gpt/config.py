@@ -63,6 +63,13 @@ class ModelConfig:
 
 
 @dataclass
+class LossConfig:
+    loss_type: Literal["fused_linear", "fused", "torch"] = "fused_linear"
+    use_l2warp: bool = False
+    num_chunks: int = 8
+
+
+@dataclass
 class TrainerConfig:
     steps: int = 100000
     log_every: int = 10
@@ -95,15 +102,16 @@ class Comm:
 
 @dataclass
 class Config:
+    comm: Comm = field(default_factory=Comm)
+    ckpt: CheckpointConfig = field(default_factory=CheckpointConfig)
     data: DataConfig = field(default_factory=DataConfig)
+    debug: Debug = field(default_factory=Debug)
+    dist: DistributedConfig = field(default_factory=DistributedConfig)
+    loss: LossConfig = field(default_factory=LossConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
     sched: SchedulerConfig = field(default_factory=SchedulerConfig)
-    dist: DistributedConfig = field(default_factory=DistributedConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
-    ckpt: CheckpointConfig = field(default_factory=CheckpointConfig)
-    comm: Comm = field(default_factory=Comm)
-    debug: Debug = field(default_factory=Debug)
 
     project: str = "gpt"
 

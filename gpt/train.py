@@ -16,14 +16,17 @@ from torchtitan.tools.utils import GarbageCollection, device_module, device_type
 from gpt.ckpt import load_checkpoint, save_checkpoint
 from gpt.config import Config
 from gpt.data import build_dataset
+from gpt.loss import build_loss
 from gpt.models.gpt import GPT
-from gpt.optimizer.muon import Muon
+from gpt.optim import build_optimizer
 
 
 class Trainer:
     def __init__(self, config: Config):
         self.step = 0
         self.config = config
+
+        logger.info(f"Running with configs: {self.config.to_dict()}")
 
         self.gc_handler = GarbageCollection()
         device_memory_monitor = build_device_memory_monitor()
@@ -55,32 +58,24 @@ class Trainer:
         with (torch.device("meta"), set_default_dtype(param_dtype)):
             self.model = GPT(config.model)
 
+        self.loss_fn = build_loss(config.loss)
+
         if self.mesh is not None:
             mp_policy = MixedPrecisionPolicy(param_dtype=param_dtype, reduce_dtype=reduce_dtype)
             for block in self.model.layers:
                 fully_shard(block, mesh=self.mesh, mp_policy=mp_policy)
             fully_shard(self.model, mesh=self.mesh, mp_policy=mp_policy, reshard_after_forward=False)
-            self.amp_manager = nullcontext()
+            self.maybe_amp = nullcontext()
         else:
-            self.amp_manager = torch.autocast(device_type, dtype=param_dtype)
+            self.maybe_amp = torch.autocast(device_type, dtype=param_dtype)
 
         self.model.to_empty(device=self.device)
         with torch.no_grad():
             self.model.init_weights()
         self.model.train()
 
-        self.optimizer = Muon(
-            self.model.parameters(),
-            distributed_mesh=self.mesh,
-            lr=config.optim.lr,
-            weight_decay=config.optim.weight_decay,
-        )
-
-        self.scheduler = build_lr_schedulers(
-            [self.optimizer],
-            config.sched,
-            config.trainer.steps,
-        )
+        self.optimizer = build_optimizer(self.model, self.config, self.mesh)
+        self.scheduler = build_lr_schedulers([self.optimizer], self.config.sched, self.config.trainer.steps)
 
         if config.ckpt.resume_from:
             load_checkpoint(Path(config.ckpt.resume_from), self.model, self.optimizer)
@@ -88,8 +83,11 @@ class Trainer:
 
     def forward_backward(self, batch):
         batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
-        with self.amp_manager:
-            loss = self.model(**batch)
+
+        with self.maybe_amp:
+            hidden_states = self.model(**batch)
+            loss = self.loss_fn(hidden_states, batch['labels'], self.model.lm_head)
+
         loss.backward()
         return loss
 
