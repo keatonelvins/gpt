@@ -64,7 +64,7 @@ class ModelConfig:
 
 @dataclass
 class LossConfig:
-    loss_type: Literal["fused_linear", "fused", "torch"] = "fused_linear"
+    type: Literal["fused_linear", "fused", "torch"] = "fused_linear"
     use_l2warp: bool = False
     num_chunks: int = 8
 
@@ -92,6 +92,12 @@ class CheckpointConfig:
 
 
 @dataclass
+class Job:
+    config_file: str | None = None
+    """File to read job configs from"""
+
+
+@dataclass
 class Comm:
     init_timeout_seconds: int = 300
     train_timeout_seconds: int = 100
@@ -102,6 +108,7 @@ class Comm:
 
 @dataclass
 class Config:
+    job: Job = field(default_factory=Job)
     comm: Comm = field(default_factory=Comm)
     ckpt: CheckpointConfig = field(default_factory=CheckpointConfig)
     data: DataConfig = field(default_factory=DataConfig)

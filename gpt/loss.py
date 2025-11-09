@@ -11,17 +11,17 @@ class Loss(nn.Module):
 
     def __init__(self, loss_config: LossConfig):
         super().__init__()
-        if loss_config.loss_type == "fused_linear":
+        if loss_config.type == "fused_linear":
             self.criterion = FusedLinearCrossEntropyLoss(
                 num_chunks=loss_config.num_chunks,
                 use_l2warp=loss_config.use_l2warp,
             )
-        elif loss_config.loss_type == "fused":
+        elif loss_config.type == "fused":
             self.criterion = FusedCrossEntropyLoss(inplace_backward=True)
         else:
             self.criterion = nn.CrossEntropyLoss()
         self.use_l2warp = loss_config.use_l2warp
-        self.use_fused_linear = loss_config.loss_type == "fused_linear"
+        self.use_fused_linear = loss_config.type == "fused_linear"
 
     def forward(
         self,
