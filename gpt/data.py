@@ -57,23 +57,19 @@ def pack(examples: pa.Table, seq_len: int) -> pa.Table:
     order = np.argsort(-lens)
 
     succ = IntSucc(seq_len)
-    succ.add(seq_len)  # sentinel enables new bins
-    by_space = defaultdict(deque)  # space -> deque[bins]
-    bins = []  # each: {"ids": [...], "len": int}
+    by_space, bins = defaultdict(deque), []
 
     for i in order:
-        L = int(lens[i])
-        if not L:
-            continue
-        s = succ.next_geq(L)
+        example_len = int(lens[i])
+        s = succ.next_geq(example_len)
         b = by_space[s].popleft() if s < seq_len else {"ids": [], "len": 0}
         if s < seq_len and not by_space[s]:
             succ.discard(s)
         b["ids"].append(int(i))
-        b["len"] += L
+        b["len"] += example_len
         if s == seq_len:
             bins.append(b)
-        ns = s - L
+        ns = s - example_len
         by_space[ns].append(b)
         if ns:
             succ.add(ns)
@@ -82,17 +78,14 @@ def pack(examples: pa.Table, seq_len: int) -> pa.Table:
     ids_taken = take(ids, reorder)
     tok_counts = [b["len"] for b in bins]
     offs = np.cumsum([0] + tok_counts, dtype=ids_taken.offsets.type.to_pandas_dtype())
-    LA = type(ids_taken)
-    packed_ids = LA.from_arrays(offs, ids_taken.values)
+    packed_ids = type(ids_taken).from_arrays(offs, ids_taken.values)
     dl = lens[reorder]
-    T = int(offs[-1])
-    pos = np.ones(T, dtype=np.int32)
+    pos = np.ones(int(offs[-1]), dtype=np.int32)
     pos[0] = 0
     if dl.size > 1:
         cut = dl[:-1].cumsum()
         pos[cut] = -(dl[:-1] - 1)
-    pos = pos.cumsum()
-    position_ids = LA.from_arrays(offs, pa.array(pos, type=pa.int32()))
+    position_ids = type(ids_taken).from_arrays(offs, pa.array(pos.cumsum(), type=pa.int32()))
 
     return pa.Table.from_arrays([packed_ids, position_ids], names=["input_ids", "position_ids"])
 
@@ -125,6 +118,7 @@ class IntSucc:
     def __init__(self, maxval: int):
         assert maxval >= 1
         self.N, self.bits = maxval, 0
+        self.add(maxval)
 
     def add(self, i: int):
         self.bits |= 1 << (i - 1)

@@ -26,11 +26,9 @@ class Trainer:
         self.step = 0
         self.config = config
 
-        logger.info(f"Running with configs: {self.config.to_dict()}")
-
         self.gc_handler = GarbageCollection()
-        device_memory_monitor = build_device_memory_monitor()
-        self.peak_flops = get_peak_flops(device_memory_monitor.device_name)
+        self.device_monitor = build_device_memory_monitor()
+        self.peak_flops = get_peak_flops(self.device_monitor.device_name)
 
         self.rank = int(os.getenv('LOCAL_RANK', '0'))
         self.world_size = int(os.getenv('WORLD_SIZE', '1'))
@@ -39,8 +37,8 @@ class Trainer:
 
         if self.world_size > 1:
             init_distributed(config.comm)
-            dp_replicate, dp_shard = config.dist.dp_replicate, config.dist.dp_shard
-            self.mesh = init_device_mesh("cuda", [dp_replicate, dp_shard], mesh_dim_names=["dp_replicate", "dp_shard"])
+            mesh_shape = [config.dist.dp_replicate, config.dist.dp_shard]
+            self.mesh = init_device_mesh("cuda", mesh_shape, mesh_dim_names=["dp_replicate", "dp_shard"])
             self.mesh["dp_replicate", "dp_shard"]._flatten(mesh_dim_name="dp")
         else:
             self.mesh = None
@@ -50,7 +48,7 @@ class Trainer:
         tokenizer = Tokenizer.from_file(config.data.tokenizer_path)
         eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
         ds = build_dataset(config.data, tokenizer, eos_token_id).to_iterable_dataset(num_shards=self.world_size)
-        self.dataset = ds.shard(num_shards=self.world_size, index=self.rank).batch(batch_size=1)
+        self.dataset = ds.shard(num_shards=self.world_size, index=self.rank).batch(batch_size=1, drop_last_batch=True)
 
         param_dtype = getattr(torch, config.trainer.param_dtype)
         reduce_dtype = getattr(torch, config.trainer.reduce_dtype)

@@ -21,7 +21,7 @@ class Loss(nn.Module):
         else:
             self.criterion = nn.CrossEntropyLoss()
         self.use_l2warp = loss_config.use_l2warp
-        self.use_fused_linear = loss_config.type == "fused_linear"
+        self.materialize_logits = loss_config.type != "fused_linear"
 
     def forward(
         self,
@@ -29,13 +29,12 @@ class Loss(nn.Module):
         labels: torch.LongTensor,
         lm_head: nn.Linear,
     ) -> torch.Tensor:
-        logits = None if self.use_fused_linear else lm_head(hidden_states)
+        if self.materialize_logits:
+            logits = lm_head(hidden_states)
+            loss = self.criterion(logits.view(labels.numel(), -1), labels.view(-1))
+            return l2_warp(loss, logits) if self.use_l2warp else loss
 
-        if self.use_fused_linear:
-            return self.criterion(hidden_states, labels, lm_head.weight, lm_head.bias)
-
-        loss = self.criterion(logits.view(labels.numel(), -1), labels.view(-1))
-        return l2_warp(loss, logits) if self.use_l2warp else loss
+        return self.criterion(hidden_states, labels, lm_head.weight, lm_head.bias)
 
 
 def build_loss(loss_config: LossConfig) -> Loss:
