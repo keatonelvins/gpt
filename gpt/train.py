@@ -43,12 +43,12 @@ class Trainer:
         else:
             self.mesh = None
 
-        set_determinism(world_mesh=self.mesh, device=self.device, debug_config=config.debug, distinct_seed_mesh_dims=[])
+        set_determinism(self.mesh, self.device, config.debug, distinct_seed_mesh_dims=[])
 
         tokenizer = Tokenizer.from_file(config.data.tokenizer_path)
         eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
-        ds = build_dataset(config.data, tokenizer, eos_token_id).to_iterable_dataset(num_shards=self.world_size)
-        self.dataset = ds.shard(num_shards=self.world_size, index=self.rank).batch(batch_size=1, drop_last_batch=True)
+        ds = build_dataset(config.data, tokenizer, eos_token_id).to_iterable_dataset(self.world_size)
+        self.dataset = ds.shard(self.world_size, self.rank).batch(1, drop_last_batch=True)
 
         param_dtype = getattr(torch, config.trainer.param_dtype)
         reduce_dtype = getattr(torch, config.trainer.reduce_dtype)
