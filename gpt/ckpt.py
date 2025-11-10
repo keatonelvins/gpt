@@ -15,7 +15,6 @@ from torch.optim.optimizer import Optimizer
 from gpt.config import Config
 
 
-# ref: https://docs.pytorch.org/tutorials/recipes/distributed_checkpoint_recipe.html
 class TrainerState(Stateful):
     """Stateful tracker for saving/loading checkpoints."""
 
@@ -25,10 +24,7 @@ class TrainerState(Stateful):
 
     def state_dict(self) -> dict[str, Any]:
         model, optim = get_state_dict(self.model, self.optim, options=StateDictOptions(cpu_offload=True))
-        return {
-            "model": model,
-            "optim": optim,
-        }
+        return { "model": model, "optim": optim }
 
     def load_state_dict(self, state_dict: dict[str, Any]):
         set_state_dict(
