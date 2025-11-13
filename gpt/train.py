@@ -17,7 +17,7 @@ from gpt.ckpt import load_checkpoint, save_checkpoint
 from gpt.config import Config
 from gpt.data import build_dataset
 from gpt.loss import build_loss
-from gpt.models.gpt import GPT
+from gpt.models import MODEL_REGISTRY
 from gpt.optim import build_optimizer
 
 
@@ -54,7 +54,7 @@ class Trainer:
         reduce_dtype = getattr(torch, config.trainer.reduce_dtype)
 
         with (torch.device("meta"), set_default_dtype(param_dtype)):
-            self.model = GPT(config.model)
+            self.model = MODEL_REGISTRY[config.model.type](config.model)
 
         self.loss_fn = build_loss(config.loss)
 

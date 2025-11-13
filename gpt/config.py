@@ -53,6 +53,7 @@ class AttnConfig:
 
 @dataclass
 class ModelConfig:
+    type: Literal["transformer", "kda"] = "transformer"
     hidden_size: int = 1024
     num_layers: int = 24
     head_dim: int = 128
