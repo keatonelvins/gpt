@@ -26,17 +26,18 @@ class Trainer:
         self.step = 0
         self.config = config
 
-        self.gc_handler = utils.GarbageCollection()
+        self.gc = utils.GarbageCollection()
         self.device_monitor = build_device_memory_monitor()
         self.peak_flops = utils.get_peak_flops(self.device_monitor.device_name)
 
         self.rank = int(os.getenv('LOCAL_RANK', '0'))
         self.world_size = int(os.getenv('WORLD_SIZE', '1'))
+
         utils.device_module.set_device(torch.device(f"{utils.device_type}:{self.rank}"))
         self.device = utils.device_module.current_device()
 
         if self.world_size > 1:
-            init_distributed(config.comm)
+            init_distributed(config.comm, enable_cpu_backend=config.trainer.enable_cpu_offload)
             mesh_shape = [config.dist.dp_replicate, config.dist.dp_shard]
             self.mesh = init_device_mesh("cuda", mesh_shape, mesh_dim_names=["dp_replicate", "dp_shard"])
             self.mesh["dp_replicate", "dp_shard"]._flatten(mesh_dim_name="dp")
@@ -77,6 +78,7 @@ class Trainer:
 
         if config.ckpt.resume_from:
             load_checkpoint(Path(config.ckpt.resume_from), self.model, self.optimizer)
+            self.gc.collect("GC after checkpoint load")
             logger.info(f"Resumed from {config.ckpt.resume_from}")
 
     def forward_backward(self, batch):
@@ -106,6 +108,7 @@ class Trainer:
 
         if self.step % self.config.ckpt.save_every == 0:
             save_checkpoint(self.step, self.config, self.model, self.optimizer)
+            self.gc.collect("GC after checkpoint save")
 
         return loss
 
@@ -114,4 +117,5 @@ class Trainer:
             if self.step >= self.config.trainer.steps:
                 break
             self.train_step(batch)
+            self.gc.run(self.step)
         return self.model

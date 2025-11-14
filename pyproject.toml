@@ -13,6 +13,7 @@ dependencies = [
     "torch>=2.9.0",
     "loguru>=0.7.3",
     "triton>=3.5.0",
+    "wandb>=0.23.0",
     "torchao>=0.14.1",
     "kernels>=0.11.0",
     "flash-linear-attention>=0.4.0",

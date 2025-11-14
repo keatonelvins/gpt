@@ -76,6 +76,7 @@ class TrainerConfig:
     log_every: int = 10
     param_dtype: Literal["bfloat16", "float32"] = "bfloat16"
     reduce_dtype: Literal["float32"] = "float32"
+    enable_cpu_offload: bool = False
 
 
 @dataclass
