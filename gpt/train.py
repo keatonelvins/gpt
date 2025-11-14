@@ -11,7 +11,7 @@ from torchtitan.components.lr_scheduler import build_lr_schedulers
 from torchtitan.components.metrics import build_device_memory_monitor
 from torchtitan.distributed.utils import clip_grad_norm_ as clip
 from torchtitan.distributed.utils import init_distributed, set_determinism
-from torchtitan.tools.utils import GarbageCollection, device_module, device_type, get_peak_flops, set_default_dtype
+from torchtitan.tools import utils
 
 from gpt.ckpt import load_checkpoint, save_checkpoint
 from gpt.config import Config
@@ -26,14 +26,14 @@ class Trainer:
         self.step = 0
         self.config = config
 
-        self.gc_handler = GarbageCollection()
+        self.gc_handler = utils.GarbageCollection()
         self.device_monitor = build_device_memory_monitor()
-        self.peak_flops = get_peak_flops(self.device_monitor.device_name)
+        self.peak_flops = utils.get_peak_flops(self.device_monitor.device_name)
 
         self.rank = int(os.getenv('LOCAL_RANK', '0'))
         self.world_size = int(os.getenv('WORLD_SIZE', '1'))
-        device_module.set_device(torch.device(f"{device_type}:{self.rank}"))
-        self.device = device_module.current_device()
+        utils.device_module.set_device(torch.device(f"{utils.device_type}:{self.rank}"))
+        self.device = utils.device_module.current_device()
 
         if self.world_size > 1:
             init_distributed(config.comm)
@@ -53,7 +53,7 @@ class Trainer:
         param_dtype = getattr(torch, config.trainer.param_dtype)
         reduce_dtype = getattr(torch, config.trainer.reduce_dtype)
 
-        with (torch.device("meta"), set_default_dtype(param_dtype)):
+        with (torch.device("meta"), utils.set_default_dtype(param_dtype)):
             self.model = MODEL_REGISTRY[config.model.type](config.model)
 
         self.loss_fn = build_loss(config.loss)
@@ -65,7 +65,7 @@ class Trainer:
             fully_shard(self.model, mesh=self.mesh, mp_policy=mp_policy, reshard_after_forward=False)
             self.maybe_amp = nullcontext()
         else:
-            self.maybe_amp = torch.autocast(device_type, dtype=param_dtype)
+            self.maybe_amp = torch.autocast(utils.device_type, dtype=param_dtype)
 
         self.model.to_empty(device=self.device)
         with torch.no_grad():

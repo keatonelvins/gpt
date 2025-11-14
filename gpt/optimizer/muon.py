@@ -114,7 +114,7 @@ class Muon(Optimizer):
             self._process_group = None
         else:
             raise TypeError(
-                f"Invalid distributed_mesh type: {type(distributed_mesh)}. Expected DeviceMesh or ProcessGroup.",
+                f"Invalid mesh type: {type(distributed_mesh)}. Expected DeviceMesh or ProcessGroup.",
             )
         self._distributed_mesh = distributed_mesh
 
@@ -391,7 +391,7 @@ def muon_update_batch_async(
         assert not isinstance(U[0], DTensor), "U should contain local shards"
         assert (
             X[0].size(shard_dim) % world_size == 0
-        ), f"Shard dimension {shard_dim} size {X[0].size(shard_dim)} is not divisible by world size {world_size}."
+        ), f"Shard dim {shard_dim} size {X[0].size(shard_dim)} is not divisible by world size {world_size}."
 
         # Allocate buffers to receive shards of one whole matrix from other devices
         single_matrix_shards = [torch.empty_like(u) for u in U]
