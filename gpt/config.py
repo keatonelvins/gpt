@@ -6,7 +6,7 @@ from tokenizers import Tokenizer
 
 @dataclass
 class DatasetConfig:
-    path: str = "karpathy/fineweb-edu-100b-shuffle"
+    path: str = "keatone/TinierStories"
     split: str = "train"
     name: str | None = None
 
@@ -38,7 +38,7 @@ class OptimConfig:
 
 @dataclass
 class SchedulerConfig:
-    warmup_steps: int = 200
+    warmup_steps: int = 20
     decay_ratio: float | None = None
     decay_type: Literal["linear", "sqrt", "cosine"] = "linear"
     min_lr_factor: float = 0.0
@@ -72,11 +72,20 @@ class LossConfig:
 
 @dataclass
 class TrainerConfig:
-    steps: int = 100000
-    log_every: int = 10
+    steps: int = 100
     param_dtype: Literal["bfloat16", "float32"] = "bfloat16"
     reduce_dtype: Literal["float32"] = "float32"
     enable_cpu_offload: bool = False
+
+
+@dataclass
+class MetricsConfig:
+    log_freq: int = 1
+    enable_wandb: bool = True
+    enable_tensorboard: bool = False
+    save_tb_folder: str = "metrics"
+    save_for_all_ranks: bool = False
+    disable_color_printing: bool = False
 
 
 @dataclass
@@ -96,7 +105,7 @@ class CheckpointConfig:
 @dataclass
 class Job:
     config_file: str | None = None
-    """File to read job configs from"""
+    dump_folder: str = "./outputs"
 
 
 @dataclass
@@ -109,6 +118,11 @@ class Comm:
 
 
 @dataclass
+class FaultToleranceConfig:
+    enable: bool = False
+
+
+@dataclass
 class Config:
     job: Job = field(default_factory=Job)
     comm: Comm = field(default_factory=Comm)
@@ -117,10 +131,12 @@ class Config:
     debug: Debug = field(default_factory=Debug)
     dist: DistributedConfig = field(default_factory=DistributedConfig)
     loss: LossConfig = field(default_factory=LossConfig)
+    metrics: MetricsConfig = field(default_factory=MetricsConfig)
     model: ModelConfig = field(default_factory=ModelConfig)
     optim: OptimConfig = field(default_factory=OptimConfig)
     sched: SchedulerConfig = field(default_factory=SchedulerConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
+    fault_tolerance: FaultToleranceConfig = field(default_factory=FaultToleranceConfig)
 
     project: str = "gpt"
 

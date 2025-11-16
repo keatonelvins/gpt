@@ -10,4 +10,5 @@ wheels/
 .env
 refs/
 comm_traces/
+outputs/
 CLAUDE.md

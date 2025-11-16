@@ -11,7 +11,6 @@ dependencies = [
     "torchtitan",
     "ruff>=0.14.3",
     "torch>=2.9.0",
-    "loguru>=0.7.3",
     "triton>=3.5.0",
     "wandb>=0.23.0",
     "torchao>=0.14.1",
@@ -22,9 +21,6 @@ dependencies = [
 [build-system]
 requires = ["uv_build>=0.9.6,<0.10.0"]
 build-backend = "uv_build"
-
-[project.scripts]
-train = "gpt:main"
 
 [tool.uv]
 prerelease = "allow"
@@ -37,7 +33,7 @@ module-root = ""
 torch = { index = "pytorch-cu130" }
 torchao = { index = "pytorch-cu130" }
 triton = { index = "pytorch-cu130" }
-torchtitan = { git = "https://github.com/pytorch/torchtitan.git" }
+torchtitan = { git = "https://github.com/pytorch/torchtitan.git", rev = "e37f83f" }
 
 [[tool.uv.index]]
 name = "pytorch-cu130"

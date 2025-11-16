@@ -1,17 +1,18 @@
 import os
+import time
 from contextlib import nullcontext
 from pathlib import Path
 
 import torch
-from loguru import logger
 from tokenizers import Tokenizer
 from torch.distributed._composable.fsdp import MixedPrecisionPolicy, fully_shard
-from torch.distributed.device_mesh import init_device_mesh
 from torchtitan.components.lr_scheduler import build_lr_schedulers
-from torchtitan.components.metrics import build_device_memory_monitor
+from torchtitan.components.metrics import build_metrics_processor
+from torchtitan.distributed import ParallelDims
 from torchtitan.distributed.utils import clip_grad_norm_ as clip
 from torchtitan.distributed.utils import init_distributed, set_determinism
 from torchtitan.tools import utils
+from torchtitan.tools.logging import logger
 
 from gpt.ckpt import load_checkpoint, save_checkpoint
 from gpt.config import Config
@@ -27,8 +28,6 @@ class Trainer:
         self.config = config
 
         self.gc = utils.GarbageCollection()
-        self.device_monitor = build_device_memory_monitor()
-        self.peak_flops = utils.get_peak_flops(self.device_monitor.device_name)
 
         self.rank = int(os.getenv('LOCAL_RANK', '0'))
         self.world_size = int(os.getenv('WORLD_SIZE', '1'))
@@ -36,20 +35,23 @@ class Trainer:
         utils.device_module.set_device(torch.device(f"{utils.device_type}:{self.rank}"))
         self.device = utils.device_module.current_device()
 
-        if self.world_size > 1:
-            init_distributed(config.comm, enable_cpu_backend=config.trainer.enable_cpu_offload)
-            mesh_shape = [config.dist.dp_replicate, config.dist.dp_shard]
-            self.mesh = init_device_mesh("cuda", mesh_shape, mesh_dim_names=["dp_replicate", "dp_shard"])
-            self.mesh["dp_replicate", "dp_shard"]._flatten(mesh_dim_name="dp")
-        else:
-            self.mesh = None
+        init_distributed(config.comm, enable_cpu_backend=config.trainer.enable_cpu_offload)
+
+        self.parallel_dims = ParallelDims(
+            dp_replicate=config.dist.dp_replicate,
+            dp_shard=config.dist.dp_shard,
+            tp=1, pp=1, cp=1, ep=1, etp=1,
+            world_size=self.world_size,
+        )
+        self.mesh = self.parallel_dims.world_mesh if self.world_size > 1 else None
+        self.metrics = build_metrics_processor(config, self.parallel_dims)
 
         set_determinism(self.mesh, self.device, config.debug, distinct_seed_mesh_dims=[])
 
         tokenizer = Tokenizer.from_file(config.data.tokenizer_path)
         eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
         ds = build_dataset(config.data, tokenizer, eos_token_id).to_iterable_dataset(self.world_size)
-        self.dataset = ds.shard(self.world_size, self.rank).batch(1, drop_last_batch=True)
+        self.dataset = iter(ds.shard(self.world_size, self.rank).batch(1, drop_last_batch=True))
 
         param_dtype = getattr(torch, config.trainer.param_dtype)
         reduce_dtype = getattr(torch, config.trainer.reduce_dtype)
@@ -81,6 +83,9 @@ class Trainer:
             self.gc.collect("GC after checkpoint load")
             logger.info(f"Resumed from {config.ckpt.resume_from}")
 
+        self.metrics.num_flops_per_token = getattr(self.model, 'flops_per_token', 1)
+        self.total_tokens = 0
+
     def forward_backward(self, batch):
         batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
 
@@ -103,8 +108,21 @@ class Trainer:
         grad_norm = self.optimizer_step()
         self.step += 1
 
-        if self.step % self.config.trainer.log_every == 0:
-            logger.info(f"step={self.step} loss={loss.item():.4f} grad_norm={grad_norm.item():.4f}")
+        ntokens = batch['input_ids'].numel()
+        self.metrics.ntokens_since_last_log += ntokens
+        self.total_tokens += ntokens
+
+        if self.metrics.should_log(self.step):
+            extra_metrics = {
+                "n_tokens_seen": self.total_tokens,
+            }
+            self.metrics.log(
+                step=self.step,
+                global_avg_loss=loss.item(),
+                global_max_loss=loss.item(),
+                grad_norm=grad_norm.item(),
+                extra_metrics=extra_metrics,
+            )
 
         if self.step % self.config.ckpt.save_every == 0:
             save_checkpoint(self.step, self.config, self.model, self.optimizer)
@@ -113,9 +131,12 @@ class Trainer:
         return loss
 
     def train(self):
-        for batch in self.dataset:
-            if self.step >= self.config.trainer.steps:
-                break
+        while self.step < self.config.trainer.steps:
+            data_load_start = time.perf_counter()
+            batch = next(self.dataset)
+            self.metrics.data_loading_times.append(time.perf_counter() - data_load_start)
+
             self.train_step(batch)
             self.gc.run(self.step)
+        self.metrics.close()
         return self.model
