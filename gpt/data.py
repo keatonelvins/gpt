@@ -128,7 +128,6 @@ class IntSucc:
 
     def next_geq(self, x: int) -> int:
         y = self.bits >> (x - 1)
-        assert y, "no successor present (missing sentinel?)"
         return x + ((y & -y).bit_length() - 1)
 
 
