@@ -22,6 +22,9 @@ dependencies = [
 requires = ["uv_build>=0.9.6,<0.10.0"]
 build-backend = "uv_build"
 
+[project.scripts]
+train = "gpt:train"
+
 [tool.uv]
 prerelease = "allow"
 
@@ -64,3 +67,4 @@ extend-select = [
     "COM",      # enforce trailing comma rules
     "DTZ",      # require strict timezone manipulation with datetime
 ]
+ignore = ["COM812"]

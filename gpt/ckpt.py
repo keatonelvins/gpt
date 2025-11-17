@@ -24,7 +24,7 @@ class TrainerState(Stateful):
 
     def state_dict(self) -> dict[str, Any]:
         model, optim = get_state_dict(self.model, self.optim, options=StateDictOptions(cpu_offload=True))
-        return { "model": model, "optim": optim }
+        return {"model": model, "optim": optim}
 
     def load_state_dict(self, state_dict: dict[str, Any]):
         set_state_dict(

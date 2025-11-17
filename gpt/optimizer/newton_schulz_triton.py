@@ -87,7 +87,11 @@ def ns_line_1_kernel(
 
     pid = tl.program_id(axis=0)
     batch_idx, m_idx, n_idx = _pid_to_block(
-        pid, M, BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M,
+        pid,
+        M,
+        BLOCK_SIZE_M,
+        BLOCK_SIZE_N,
+        GROUP_SIZE_M,
     )
 
     # Skip blocks that don't need to be computed
@@ -152,11 +156,7 @@ def ns_line_1(A: Tensor, *, out: Tensor = None):
     output_batch_stride = out.stride(0) if out.ndim == 3 else 0
 
     def grid(meta):
-        return (
-            batch_size
-            * triton.cdiv(M, meta["BLOCK_SIZE_M"])
-            * triton.cdiv(M, meta["BLOCK_SIZE_N"]),
-        )
+        return (batch_size * triton.cdiv(M, meta["BLOCK_SIZE_M"]) * triton.cdiv(M, meta["BLOCK_SIZE_N"]),)
 
     ns_line_1_kernel[grid](
         A_ptr=A,
@@ -205,7 +205,11 @@ def ns_line_2_kernel(
 
     pid = tl.program_id(axis=0)
     batch_idx, m_idx, n_idx = _pid_to_block(
-        pid, M, BLOCK_SIZE_M, BLOCK_SIZE_N, GROUP_SIZE_M,
+        pid,
+        M,
+        BLOCK_SIZE_M,
+        BLOCK_SIZE_N,
+        GROUP_SIZE_M,
     )
 
     # Skip blocks that don't need to be computed
@@ -285,11 +289,7 @@ def ns_line_2(A: Tensor, alpha: float, beta: float, *, out: Tensor = None):
     output_batch_stride = out.stride(0) if out.ndim == 3 else 0
 
     def grid(meta):
-        return (
-            batch_size
-            * triton.cdiv(M, meta["BLOCK_SIZE_M"])
-            * triton.cdiv(M, meta["BLOCK_SIZE_N"]),
-        )
+        return (batch_size * triton.cdiv(M, meta["BLOCK_SIZE_M"]) * triton.cdiv(M, meta["BLOCK_SIZE_N"]),)
 
     ns_line_2_kernel[grid](
         A_ptr=A,

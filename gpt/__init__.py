@@ -19,6 +19,11 @@ os.environ["WANDB_MODE"] = "offline"
 os.environ["WANDB_PROJECT"] = "gpt"
 
 
+def train():
+    cmd = ["torchrun", "gpt/__init__.py"] + sys.argv[1:]
+    os.execvp("torchrun", cmd)
+
+
 @record
 def main():
     init_logger()

@@ -20,7 +20,8 @@ def to_local(tensor: Tensor | list[Tensor]) -> Tensor | list[Tensor]:
 
 
 def dtensor_from_local(
-    tensor: Tensor | list[Tensor], ref: Tensor,
+    tensor: Tensor | list[Tensor],
+    ref: Tensor,
 ) -> DTensor | list[DTensor]:
     """
     Convert a single local Tensor or list of local Tensors to DTensor.
@@ -38,19 +39,19 @@ def dtensor_from_local(
     if isinstance(tensor, Tensor):
         assert not isinstance(tensor, DTensor)
         return DTensor.from_local(
-            tensor, device_mesh=device_mesh, placements=placements,
+            tensor,
+            device_mesh=device_mesh,
+            placements=placements,
         )
 
     # We have a list of tensors
     assert not isinstance(tensor[0], DTensor)
-    return [
-        DTensor.from_local(t, device_mesh=device_mesh, placements=placements)
-        for t in tensor
-    ]
+    return [DTensor.from_local(t, device_mesh=device_mesh, placements=placements) for t in tensor]
 
 
 def create_param_batches(
-    params: list[Tensor], batch_size: int,
+    params: list[Tensor],
+    batch_size: int,
 ) -> Generator[list[Tensor]]:
     """
     Batch parameters into groups of size `batch_size`.
@@ -107,7 +108,9 @@ class AsyncRuntime:
     """
 
     def __init__(
-        self, task_gen: Generator["AsyncTask"], max_concurrent_tasks: int,
+        self,
+        task_gen: Generator["AsyncTask"],
+        max_concurrent_tasks: int,
     ):
         # Initialize runtime with a generator that produces AsyncTask objects
         if max_concurrent_tasks <= 0:

@@ -14,7 +14,7 @@ def build_optimizer(model: GPT, config: Config, mesh: DeviceMesh) -> Muon:
         {
             "params": param_groups["lm_head_params"],
             "algorithm": "adamw",
-            "lr": config.optim.lr / config.model.hidden_size ** 0.5,
+            "lr": config.optim.lr / config.model.hidden_size**0.5,
             "weight_decay": 0,
         },
     ]

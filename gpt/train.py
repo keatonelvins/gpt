@@ -29,8 +29,8 @@ class Trainer:
 
         self.gc = utils.GarbageCollection()
 
-        self.rank = int(os.getenv('LOCAL_RANK', '0'))
-        self.world_size = int(os.getenv('WORLD_SIZE', '1'))
+        self.rank = int(os.getenv("LOCAL_RANK", "0"))
+        self.world_size = int(os.getenv("WORLD_SIZE", "1"))
 
         utils.device_module.set_device(torch.device(f"{utils.device_type}:{self.rank}"))
         self.device = utils.device_module.current_device()
@@ -40,7 +40,11 @@ class Trainer:
         self.parallel_dims = ParallelDims(
             dp_replicate=config.dist.dp_replicate,
             dp_shard=config.dist.dp_shard,
-            tp=1, pp=1, cp=1, ep=1, etp=1,
+            tp=1,
+            pp=1,
+            cp=1,
+            ep=1,
+            etp=1,
             world_size=self.world_size,
         )
         self.mesh = self.parallel_dims.world_mesh if self.world_size > 1 else None
@@ -56,7 +60,7 @@ class Trainer:
         param_dtype = getattr(torch, config.trainer.param_dtype)
         reduce_dtype = getattr(torch, config.trainer.reduce_dtype)
 
-        with (torch.device("meta"), utils.set_default_dtype(param_dtype)):
+        with torch.device("meta"), utils.set_default_dtype(param_dtype):
             self.model = MODEL_REGISTRY[config.model.type](config.model)
 
         self.loss_fn = build_loss(config.loss)
@@ -83,7 +87,7 @@ class Trainer:
             self.gc.collect("GC after checkpoint load")
             logger.info(f"Resumed from {config.ckpt.resume_from}")
 
-        self.metrics.num_flops_per_token = getattr(self.model, 'flops_per_token', 1)
+        self.metrics.num_flops_per_token = getattr(self.model, "flops_per_token", 1)
         self.total_tokens = 0
 
     def forward_backward(self, batch):
@@ -91,7 +95,7 @@ class Trainer:
 
         with self.maybe_amp:
             hidden_states = self.model(**batch)
-            loss = self.loss_fn(hidden_states, batch['labels'], self.model.lm_head)
+            loss = self.loss_fn(hidden_states, batch["labels"], self.model.lm_head)
 
         loss.backward()
         return loss
@@ -108,7 +112,7 @@ class Trainer:
         grad_norm = self.optimizer_step()
         self.step += 1
 
-        ntokens = batch['input_ids'].numel()
+        ntokens = batch["input_ids"].numel()
         self.metrics.ntokens_since_last_log += ntokens
         self.total_tokens += ntokens
 

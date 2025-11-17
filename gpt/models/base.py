@@ -19,17 +19,17 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
     def init_weights(self):
-        sigma = 1.0 / (self.config.hidden_size ** 0.5)
+        sigma = 1.0 / (self.config.hidden_size**0.5)
         nn.init.trunc_normal_(self.embeddings.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
 
         for layer in self.layers:
             layer.attn_norm.reset_parameters()
             layer.mlp_norm.reset_parameters()
-            if hasattr(layer.attn, 'rotary'):
+            if hasattr(layer.attn, "rotary"):
                 layer.attn.rotary.reset_parameters()
 
         self.norm.reset_parameters()
-        sigma = 1.0 / (self.config.hidden_size ** 0.5)
+        sigma = 1.0 / (self.config.hidden_size**0.5)
         nn.init.trunc_normal_(self.lm_head.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
 
     def get_param_groups(self) -> dict[str, Any]:

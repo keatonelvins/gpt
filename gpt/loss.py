@@ -8,7 +8,6 @@ from gpt.config import LossConfig
 
 
 class Loss(nn.Module):
-
     def __init__(self, loss_config: LossConfig):
         super().__init__()
         if loss_config.type == "fused_linear":
@@ -29,6 +28,7 @@ class Loss(nn.Module):
             loss = self.criterion(logits.view(labels.numel(), -1), labels.view(-1))
             return l2_warp(loss, logits) if self.use_l2warp else loss
         return self.criterion(h, labels, lm_head.weight, lm_head.bias)
+
 
 def build_loss(loss_config: LossConfig) -> Loss:
     return Loss(loss_config)

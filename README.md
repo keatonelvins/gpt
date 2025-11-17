@@ -1,5 +1,5 @@
 ```bash
-uv run torchrun gpt/__init__.py
+uv run train
 uv run wandb beta leet
 ```
 
