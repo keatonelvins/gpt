@@ -44,9 +44,6 @@ class Muon(Optimizer):
         flatten: Whether to flatten 3D+ tensors to 2D for Muon updates.
             True: Tensors with 3+ dimensions are flattened to 2D. Use this for convolutional layers.
             False: Tensors are not flattened. 3D+ tensors are treated as batches of 2D matrices.
-
-    Muon optimizer algorithm by Keller Jordan: https://kellerjordan.github.io/posts/muon/
-    FSDP2 Muon uses all-to-all communications: https://www.essential.ai/blog/infra
     """
 
     def __init__(
@@ -352,7 +349,6 @@ def muon_update_batch_async(
     # Get one whole matrix for each device to orthogonalize
     if shard_dim is not None:
         # Use all-to-all to transform from a batch of shards to a single whole matrix
-        # https://www.essential.ai/blog/infra
         assert len(X) == world_size, "Batch size must equal world size"
         assert process_group is not None, "process_group must be provided for sharded DTensors"
         assert isinstance(X[0], DTensor), "X should contain DTensors"
@@ -527,9 +523,8 @@ def muon_update_post_orthogonalize(
     Inputs and outputs should be lists of regular Tensor, not DTensor.
     This is a separate function for compatibility with torch.compile().
     """
+    # Apply (cautious) weight decay
     if cautious_wd:
-        # Apply cautious weight decay: only where update and parameter signs align
-        # Reference: https://arxiv.org/pdf/2510.12402
         coeff = base_lr * weight_decay
 
         decay_masks = torch._foreach_mul(X, U)
@@ -541,7 +536,6 @@ def muon_update_post_orthogonalize(
         decay_terms = torch._foreach_mul(decay_terms, coeff)
         torch._foreach_sub_(X, decay_terms)
     else:
-        # Apply weight decay
         torch._foreach_mul_(X, 1 - base_lr * weight_decay)
 
     # Weight update
@@ -657,9 +651,8 @@ def adamw_update(
 
     M_div = torch._foreach_div(M, denom)
 
+    # Apply (cautious) weight decay
     if cautious_wd:
-        # Apply cautious weight decay: only where update and parameter signs align
-        # Reference: https://arxiv.org/pdf/2510.12402
         coeff = lr * weight_decay
 
         decay_masks = torch._foreach_mul(X, M_div)
@@ -671,7 +664,6 @@ def adamw_update(
         torch._foreach_mul_(decay_terms, coeff)
         torch._foreach_sub_(X, decay_terms)
     else:
-        # Apply weight decay
         torch._foreach_mul_(X, 1 - lr * weight_decay)
 
     # Weight update

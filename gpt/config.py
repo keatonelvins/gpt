@@ -66,7 +66,7 @@ class ModelConfig:
 
 @dataclass
 class LossConfig:
-    type: Literal["fused_linear", "fused", "torch"] = "fused_linear"
+    type: Literal["fused", "fused_linear", "torch"] = "fused"
     use_l2warp: bool = False
     num_chunks: int = 8
 
@@ -138,8 +138,6 @@ class Config:
     sched: SchedulerConfig = field(default_factory=SchedulerConfig)
     trainer: TrainerConfig = field(default_factory=TrainerConfig)
     fault_tolerance: FaultToleranceConfig = field(default_factory=FaultToleranceConfig)
-
-    project: str = "gpt"
 
     def __post_init__(self):
         if self.model.vocab_size is None:
