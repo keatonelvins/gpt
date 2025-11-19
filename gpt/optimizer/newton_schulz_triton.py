@@ -311,7 +311,7 @@ def ns_line_2(A: Tensor, alpha: float, beta: float, *, out: Tensor = None):
 @torch.compile(dynamic=False, fullgraph=True)
 def zeropower_via_newtonschulz5(G: Tensor, epsilon: float = 1e-7):
     """
-    Reference implementation of Newton-Schulz without Triton.
+    Reference implementation of Newton-Schulz (no Triton).
     """
     # Newton-Schulz constants
     ns_consts = [

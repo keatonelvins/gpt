@@ -24,4 +24,5 @@ def build_optimizer(model: GPT, config: Config, mesh: DeviceMesh) -> Muon:
         distributed_mesh=mesh,
         lr=config.optim.lr,
         weight_decay=config.optim.weight_decay,
+        cautious_wd=config.optim.cautious_wd,
     )

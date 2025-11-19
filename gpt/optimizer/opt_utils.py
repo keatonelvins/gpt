@@ -19,36 +19,6 @@ def to_local(tensor: Tensor | list[Tensor]) -> Tensor | list[Tensor]:
     return [t.to_local() if isinstance(t, DTensor) else t for t in tensor]
 
 
-def dtensor_from_local(
-    tensor: Tensor | list[Tensor],
-    ref: Tensor,
-) -> DTensor | list[DTensor]:
-    """
-    Convert a single local Tensor or list of local Tensors to DTensor.
-    The reference tensor's device mesh and placements are used to create the DTensor.
-    if the reference tensor is not a DTensor, we return the input unmodified.
-    """
-    if not isinstance(ref, DTensor):
-        assert isinstance(ref, Tensor)
-        return tensor
-
-    device_mesh = ref.device_mesh
-    placements = ref.placements
-
-    # If we have a single tensor
-    if isinstance(tensor, Tensor):
-        assert not isinstance(tensor, DTensor)
-        return DTensor.from_local(
-            tensor,
-            device_mesh=device_mesh,
-            placements=placements,
-        )
-
-    # We have a list of tensors
-    assert not isinstance(tensor[0], DTensor)
-    return [DTensor.from_local(t, device_mesh=device_mesh, placements=placements) for t in tensor]
-
-
 def create_param_batches(
     params: list[Tensor],
     batch_size: int,

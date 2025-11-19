@@ -33,6 +33,7 @@ class DistributedConfig:
 class OptimConfig:
     lr: float = 3e-4
     weight_decay: float = 0.1
+    cautious_wd: bool = False
     max_norm: float = 1.0
 
 

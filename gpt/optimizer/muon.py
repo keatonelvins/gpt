@@ -23,7 +23,7 @@ from .opt_utils import (
 
 class Muon(Optimizer):
     """
-    Distributed Muon optimizer for PyTorch FSDP2. Also compatible with DDP.
+    Distributed Muon optimizer for PyTorch FSDP + TP.
 
     Args:
         params: Parameters for the optimizer.
@@ -33,17 +33,17 @@ class Muon(Optimizer):
         mu: Momentum factor for Muon algorithm.
         betas: Tuple of (beta1, beta2) for AdamW algorithms.
         weight_decay: Weight decay factor.
+        cautious_wd: Whether to use cautious weight decay.
         epsilon: Small value to avoid division by zero.
         nesterov: Whether to use Nesterov momentum.
         adjust_lr: How to adjust the learning rate for Muon updates ("spectral_norm" or "rms_norm" or None).
             "spectral_norm": Adjust based on spectral norm, for learning rate transfer across model scale.
             "rms_norm": Adjust based on RMS norm, for learning rate compatibility with Adam/AdamW.
+            "keller": Adjust based on RMS norm with clipping.
             None: Do not adjust the learning rate.
         flatten: Whether to flatten 3D+ tensors to 2D for Muon updates.
             True: Tensors with 3+ dimensions are flattened to 2D. Use this for convolutional layers.
             False: Tensors are not flattened. 3D+ tensors are treated as batches of 2D matrices.
-        newton_schulz_func: Use a custom Newton-Schulz function for orthogonalization.
-            Signature is `func(input: Tensor, epsilon: float) -> Tensor`.
 
     Muon optimizer algorithm by Keller Jordan: https://kellerjordan.github.io/posts/muon/
     FSDP2 Muon uses all-to-all communications: https://www.essential.ai/blog/infra
@@ -57,6 +57,7 @@ class Muon(Optimizer):
         mu: float = 0.95,
         betas: tuple[float, float] = (0.9, 0.95),
         weight_decay: float = 0.01,
+        cautious_wd: bool = False,
         epsilon: float = 1e-8,
         nesterov: bool = False,
         adjust_lr: str | None = "spectral_norm",
@@ -68,9 +69,9 @@ class Muon(Optimizer):
             raise ValueError(f"Invalid momentum factor (mu): {mu}")
         if len(betas) != 2 or betas[0] < 0.0 or betas[1] < 0.0:
             raise ValueError(f"Invalid betas: {betas}")
-        if adjust_lr not in ("spectral_norm", "rms_norm", None):
+        if adjust_lr not in ("spectral_norm", "rms_norm", "keller", None):
             raise ValueError(
-                f"Invalid adjust_lr value: {adjust_lr}. Must be 'spectral_norm', 'rms_norm', or None.",
+                f"Invalid adjust_lr value: {adjust_lr} ('spectral_norm', 'rms_norm', 'keller', or None).",
             )
 
         defaults = {
@@ -79,6 +80,7 @@ class Muon(Optimizer):
             "beta1": betas[0],
             "beta2": betas[1],
             "weight_decay": weight_decay,
+            "cautious_wd": cautious_wd,
             "algorithm": "muon",
             "step": 0,
             "epsilon": epsilon,
@@ -176,6 +178,7 @@ class Muon(Optimizer):
                 "momentum": torch.tensor(group["mu"]),
                 "weight_decay": torch.tensor(group["weight_decay"]),
                 "epsilon": torch.tensor(group["epsilon"]),
+                "cautious_wd": group["cautious_wd"],
                 "nesterov": group["nesterov"],
                 "flatten": group["flatten"],
                 "adjust_lr": group["adjust_lr"],
@@ -292,6 +295,7 @@ class Muon(Optimizer):
             weight_decay = torch.tensor(group["weight_decay"])
             epsilon = torch.tensor(group["epsilon"])
             step = torch.tensor(group["step"])
+            cautious_wd = group["cautious_wd"]
 
             yield AsyncTask(
                 adamw_update_async(
@@ -303,6 +307,7 @@ class Muon(Optimizer):
                     beta1=beta1,
                     beta2=beta2,
                     weight_decay=weight_decay,
+                    cautious_wd=cautious_wd,
                     step=step,
                     epsilon=epsilon,
                 ),
@@ -317,6 +322,7 @@ def muon_update_batch_async(
     momentum: Tensor,  # Momentum factor (scalar tensor)
     weight_decay: Tensor,  # Weight decay (scalar tensor)
     epsilon: Tensor,  # Epsilon (scalar tensor)
+    cautious_wd: bool,  # Whether to use cautious weight decay
     nesterov: bool,  # Whether to use Nesterov momentum
     flatten: bool,  # Whether to flatten 3D+ tensors to 2D
     adjust_lr: str | None,  # How to adjust learning rate
@@ -442,6 +448,8 @@ def muon_update_batch_async(
         adjusted_lr = adjust_lr_spectral_norm(lr, X[0].shape, flatten=flatten)
     elif adjust_lr == "rms_norm":
         adjusted_lr = adjust_lr_rms_norm(lr, X[0].shape, flatten=flatten)
+    elif adjust_lr == "keller":
+        adjusted_lr = adjust_lr_keller(lr, X[0].shape, flatten=flatten)
     else:
         raise ValueError(f"Unknown adjust_lr value: {adjust_lr}")
 
@@ -452,6 +460,7 @@ def muon_update_batch_async(
         base_lr=lr,
         adjusted_lr=adjusted_lr,
         weight_decay=weight_decay,
+        cautious_wd=cautious_wd,
     )
 
 
@@ -464,13 +473,14 @@ def adamw_update_async(
     beta1: Tensor,  # Beta 1 (scalar tensor)
     beta2: Tensor,  # Beta 2 (scalar tensor)
     weight_decay: Tensor,  # Weight decay (scalar tensor)
+    cautious_wd: bool,  # Whether to use cautious weight decay
     step: int,
     epsilon: float,
 ) -> Generator[None]:
     """
     Async wrapper around foreach AdamW update.
     """
-    adamw_update(X, G, M, V, lr, beta1, beta2, weight_decay, step, epsilon)
+    adamw_update(X, G, M, V, lr, beta1, beta2, weight_decay, cautious_wd, step, epsilon)
     yield
 
 
@@ -510,14 +520,29 @@ def muon_update_post_orthogonalize(
     base_lr: Tensor,
     adjusted_lr: Tensor,
     weight_decay: Tensor,
+    cautious_wd: bool,
 ):
     """
     Apply weight decay and weight update after orthogonalization.
     Inputs and outputs should be lists of regular Tensor, not DTensor.
     This is a separate function for compatibility with torch.compile().
     """
-    # Apply weight decay
-    torch._foreach_mul_(X, 1 - base_lr * weight_decay)
+    if cautious_wd:
+        # Apply cautious weight decay: only where update and parameter signs align
+        # Reference: https://arxiv.org/pdf/2510.12402
+        coeff = base_lr * weight_decay
+
+        decay_masks = torch._foreach_mul(X, U)
+        decay_masks = torch._foreach_sign(decay_masks)  # {-1, 0, 1}
+        decay_masks = torch._foreach_add(decay_masks, 1)  # {0, 1, 2}
+        decay_masks = torch._foreach_minimum(decay_masks, 1)  # {0, 1, 1}
+
+        decay_terms = torch._foreach_mul(X, decay_masks)
+        decay_terms = torch._foreach_mul(decay_terms, coeff)
+        torch._foreach_sub_(X, decay_terms)
+    else:
+        # Apply weight decay
+        torch._foreach_mul_(X, 1 - base_lr * weight_decay)
 
     # Weight update
     U = torch._foreach_mul(U, adjusted_lr)
@@ -567,6 +592,15 @@ def adjust_lr_spectral_norm(lr, param_shape, flatten):
     return lr * math.sqrt(fan_out / fan_in)
 
 
+def adjust_lr_keller(lr, param_shape, flatten):
+    if flatten:
+        fan_out = param_shape[0]
+        fan_in = math.prod(param_shape[1:])
+    else:
+        fan_out, fan_in = param_shape[-2:]
+    return lr * math.sqrt(max(1, fan_out / fan_in))
+
+
 @torch.compile(fullgraph=True)
 def adamw_update(
     X: list[Tensor],  # Model weights (modified in place)
@@ -577,6 +611,7 @@ def adamw_update(
     beta1: Tensor,  # Beta 1 (scalar tensor)
     beta2: Tensor,  # Beta 2 (scalar tensor)
     weight_decay: Tensor,  # Weight decay (scalar tensor)
+    cautious_wd: bool,  # Whether to use cautious weight decay
     step: int,
     epsilon: float,
 ):
@@ -620,11 +655,26 @@ def adamw_update(
     # Adjust learning rate to include bias correction 1
     adj_lr = lr / bias_correction1
 
-    # Apply weight decay
-    torch._foreach_mul_(X, 1 - lr * weight_decay)
+    M_div = torch._foreach_div(M, denom)
+
+    if cautious_wd:
+        # Apply cautious weight decay: only where update and parameter signs align
+        # Reference: https://arxiv.org/pdf/2510.12402
+        coeff = lr * weight_decay
+
+        decay_masks = torch._foreach_mul(X, M_div)
+        decay_masks = torch._foreach_sign(decay_masks)  # {-1, 0, 1}
+        decay_masks = torch._foreach_add(decay_masks, 1)  # {0, 1, 2}
+        decay_masks = torch._foreach_minimum(decay_masks, 1)  # {0, 1, 1}
+
+        decay_terms = torch._foreach_mul(X, decay_masks)
+        torch._foreach_mul_(decay_terms, coeff)
+        torch._foreach_sub_(X, decay_terms)
+    else:
+        # Apply weight decay
+        torch._foreach_mul_(X, 1 - lr * weight_decay)
 
     # Weight update
     # X = X - adj_lr * M / denom
-    M_div = torch._foreach_div(M, denom)
     torch._foreach_mul_(M_div, adj_lr)
     torch._foreach_sub_(X, M_div)

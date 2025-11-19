@@ -30,11 +30,14 @@ def main():
     config, manager = Config(), ConfigManager(config_cls=Config)
 
     if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-        cli_args = [f"--job.config-file={config_path}"] + sys.argv[2:]
-        toml_values = manager._maybe_load_toml(cli_args)
-        base_config = manager._dict_to_dataclass(Config, toml_values)
-        config = tyro.cli(Config, args=cli_args, default=base_config, registry=custom_registry)
+        if sys.argv[1].startswith("--"):
+            config = tyro.cli(Config, args=sys.argv[1:], registry=custom_registry)
+        else:
+            config_path = sys.argv[1]
+            cli_args = [f"--job.config-file={config_path}"] + sys.argv[2:]
+            toml_values = manager._maybe_load_toml(cli_args)
+            base_config = manager._dict_to_dataclass(Config, toml_values)
+            config = tyro.cli(Config, args=cli_args, default=base_config, registry=custom_registry)
 
     trainer = Trainer(config)
     trainer.train()

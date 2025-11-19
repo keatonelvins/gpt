@@ -16,7 +16,7 @@ class KDABlock(nn.Module):
         self.layer_idx = layer_idx
 
         self.attn_norm = RMSNorm(config.hidden_size, eps=config.norm_eps)
-        if config.attn is not None and layer_idx in config.attn.layers:
+        if layer_idx in config.attn.layers:
             self.attn = Attention(
                 hidden_size=config.hidden_size,
                 num_heads=config.attn.num_heads,
