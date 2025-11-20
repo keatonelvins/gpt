@@ -37,7 +37,7 @@ class Trainer:
         init_distributed(config.comm, enable_cpu_backend=config.trainer.enable_cpu_offload)
 
         self.parallel_dims = ParallelDims(
-            **vars(config.dist), pp=1, cp=1, ep=1, etp=1, world_size=self.world_size
+            **vars(config.dist), tp=1, pp=1, cp=1, ep=1, etp=1, world_size=self.world_size
         )
         self.mesh = self.parallel_dims.world_mesh if self.world_size > 1 else None
         self.metrics = build_metrics_processor(config, self.parallel_dims)

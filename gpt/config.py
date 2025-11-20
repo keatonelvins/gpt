@@ -28,7 +28,6 @@ class DataConfig:
 class DistributedConfig:
     dp_replicate: int = 1
     dp_shard: int = -1
-    tp: int = 1
 
 
 @dataclass
