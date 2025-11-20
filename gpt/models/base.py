@@ -25,11 +25,8 @@ class GPT(nn.Module):
         for layer in self.layers:
             layer.attn_norm.reset_parameters()
             layer.mlp_norm.reset_parameters()
-            if hasattr(layer.attn, "rotary"):
-                layer.attn.rotary.reset_parameters()
 
         self.norm.reset_parameters()
-        sigma = 1.0 / (self.config.hidden_size**0.5)
         nn.init.trunc_normal_(self.lm_head.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
 
     def get_param_groups(self) -> dict[str, Any]:
