@@ -1,9 +1,7 @@
-from gpt.models.kda.model import KDA
-from gpt.models.transformer.model import Transformer
+from gpt.models.olmo.model import Olmo
 
 MODEL_REGISTRY = {
-    "transformer": Transformer,
-    "kda": KDA,
+    "olmo": Olmo,
 }
 
-__all__ = ["MODEL_REGISTRY", "KDA", "Transformer"]
+__all__ = ["MODEL_REGISTRY"]

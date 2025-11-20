@@ -1,6 +1,5 @@
 import os
 from collections import defaultdict, deque
-from dataclasses import asdict
 from functools import partial
 
 import numpy as np
@@ -16,7 +15,7 @@ from gpt.config import DataConfig
 def build_dataset(config: DataConfig, tokenizer: Tokenizer, eos_token_id: int):
     """Tokenize, pack, and convert to tensors. Will load from local cache if available."""
     ds = load_dataset(
-        **asdict(config.dataset),
+        **vars(config.dataset),
         num_proc=os.cpu_count(),
         download_mode="force_redownload" if config.skip_cache else None,
     )

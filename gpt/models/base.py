@@ -1,5 +1,3 @@
-from typing import Any
-
 import torch
 import torch.nn as nn
 from fla.modules import RMSNorm
@@ -19,17 +17,9 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
     def init_weights(self):
-        sigma = 1.0 / (self.config.hidden_size**0.5)
-        nn.init.trunc_normal_(self.embeddings.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
+        raise NotImplementedError
 
-        for layer in self.layers:
-            layer.attn_norm.reset_parameters()
-            layer.mlp_norm.reset_parameters()
-
-        self.norm.reset_parameters()
-        nn.init.trunc_normal_(self.lm_head.weight, std=sigma, a=-3 * sigma, b=3 * sigma)
-
-    def get_param_groups(self) -> dict[str, Any]:
+    def get_param_groups(self) -> dict[str, list[torch.Tensor]]:
         return {
             "matrix_params": [p for p in self.layers.parameters() if p.ndim == 2],
             "vector_params": [p for p in self.layers.parameters() if p.ndim != 2],
@@ -37,14 +27,8 @@ class GPT(nn.Module):
             "lm_head_params": list(self.lm_head.parameters()),
         }
 
-    def forward(
-        self,
-        input_ids: torch.LongTensor,
-        position_ids: torch.LongTensor,
-        attention_mask: torch.Tensor | None = None,
-        **kwargs: dict[str, Any],
-    ) -> torch.FloatTensor:
+    def forward(self, input_ids: torch.LongTensor, pos_ids: torch.LongTensor) -> torch.FloatTensor:
         hidden_states = self.embeddings(input_ids)
         for layer in self.layers:
-            hidden_states, _ = layer(hidden_states, attention_mask, **kwargs)
+            hidden_states, _ = layer(hidden_states)
         return self.norm(hidden_states)

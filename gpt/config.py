@@ -14,9 +14,10 @@ class DatasetConfig:
 @dataclass
 class DataConfig:
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
-    tokenizer_path: str = "gpt/tokenizer/llama.json"
-    seq_len: int = 2048
-    pad_to: int = 2048
+    tokenizer_path: str = "gpt/tokenizer/olmo.json"
+    eos_token: str = "<|end_of_text|>"
+    seq_len: int = 4096
+    pad_to: int = 4096
     column: str = "text"
     skip_cache: bool = False
     process_batch_size: int = 1000000
@@ -49,8 +50,12 @@ class SchedulerConfig:
 @dataclass
 class AttnConfig:
     num_heads: int = 16
+    num_kv_heads: int = 16
+    qkv_bias: bool = False
+    qk_norm: bool = False
+    window_size: int | None = None
     rope_theta: float = 10000.0
-    layers: list[int] = field(default_factory=list)
+    max_position_embeddings: int = 4096
 
 
 @dataclass

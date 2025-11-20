@@ -45,7 +45,7 @@ class Trainer:
         set_determinism(self.mesh, self.device, config.debug, distinct_seed_mesh_dims=[])
 
         tokenizer = Tokenizer.from_file(config.data.tokenizer_path)
-        eos_token_id = tokenizer.token_to_id("<|end_of_text|>")
+        eos_token_id = tokenizer.token_to_id(config.data.eos_token)
         ds = build_dataset(config.data, tokenizer, eos_token_id).to_iterable_dataset(self.world_size)
         self.dataset = iter(ds.shard(self.world_size, self.rank).batch(1, drop_last_batch=True))
 
