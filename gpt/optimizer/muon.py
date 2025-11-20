@@ -23,7 +23,7 @@ from .opt_utils import (
 
 class Muon(Optimizer):
     """
-    Distributed Muon optimizer for PyTorch FSDP + TP.
+    Distributed Muon optimizer for PyTorch DDP/FSDP/HSDP.
 
     Args:
         params: Parameters for the optimizer.
@@ -33,7 +33,7 @@ class Muon(Optimizer):
         mu: Momentum factor for Muon algorithm.
         betas: Tuple of (beta1, beta2) for AdamW algorithms.
         weight_decay: Weight decay factor.
-        cautious_wd: Whether to use cautious weight decay.
+        cautious_wd: Whether to use cautious weight decay (https://arxiv.org/pdf/2510.12402).
         epsilon: Small value to avoid division by zero.
         nesterov: Whether to use Nesterov momentum.
         adjust_lr: How to adjust the learning rate for Muon updates ("spectral_norm" or "rms_norm" or None).
@@ -60,17 +60,6 @@ class Muon(Optimizer):
         adjust_lr: str | None = "spectral_norm",
         flatten: bool = False,
     ):
-        if lr < 0.0:
-            raise ValueError(f"Invalid learning rate: {lr}")
-        if mu < 0.0:
-            raise ValueError(f"Invalid momentum factor (mu): {mu}")
-        if len(betas) != 2 or betas[0] < 0.0 or betas[1] < 0.0:
-            raise ValueError(f"Invalid betas: {betas}")
-        if adjust_lr not in ("spectral_norm", "rms_norm", "keller", None):
-            raise ValueError(
-                f"Invalid adjust_lr value: {adjust_lr} ('spectral_norm', 'rms_norm', 'keller', or None).",
-            )
-
         defaults = {
             "lr": lr,
             "mu": mu,
@@ -78,12 +67,12 @@ class Muon(Optimizer):
             "beta2": betas[1],
             "weight_decay": weight_decay,
             "cautious_wd": cautious_wd,
-            "algorithm": "muon",
-            "step": 0,
             "epsilon": epsilon,
             "nesterov": nesterov,
             "flatten": flatten,
             "adjust_lr": adjust_lr,
+            "algorithm": "muon",
+            "step": 0,
         }
         super().__init__(params, defaults)
 
@@ -105,21 +94,16 @@ class Muon(Optimizer):
 
     @torch.no_grad()
     def step(self, closure=None):
-        """
-        Perform a single optimization step.
-        """
         loss = None
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
 
-        muon_groups = []
-        adamw_groups = []
-
+        # Split params into groups by algorithm
+        muon_groups, adamw_groups = [], []
         for group in self.param_groups:
             group["step"] += 1
 
-            # Split parameter groups by algorithm
             algo = group["algorithm"]
             if algo == "muon":
                 muon_groups.append(group)
@@ -285,28 +269,19 @@ class Muon(Optimizer):
             momentums = [s["momentum"] for s in states]
             variances = [s["variance"] for s in states]
 
-            # Wrap hyperparameters in tensors for torch.compile
-            lr = torch.tensor(group["lr"])
-            beta1 = torch.tensor(group["beta1"])
-            beta2 = torch.tensor(group["beta2"])
-            weight_decay = torch.tensor(group["weight_decay"])
-            epsilon = torch.tensor(group["epsilon"])
-            step = torch.tensor(group["step"])
-            cautious_wd = group["cautious_wd"]
-
             yield AsyncTask(
                 adamw_update_async(
                     X=to_local(params),
                     G=to_local(gradients),
                     M=to_local(momentums),
                     V=to_local(variances),
-                    lr=lr,
-                    beta1=beta1,
-                    beta2=beta2,
-                    weight_decay=weight_decay,
-                    cautious_wd=cautious_wd,
-                    step=step,
-                    epsilon=epsilon,
+                    lr=torch.tensor(group["lr"]),
+                    beta1=torch.tensor(group["beta1"]),
+                    beta2=torch.tensor(group["beta2"]),
+                    weight_decay=torch.tensor(group["weight_decay"]),
+                    cautious_wd=group["cautious_wd"],
+                    epsilon=torch.tensor(group["epsilon"]),
+                    step=torch.tensor(group["step"]),
                 ),
             )
 
