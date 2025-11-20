@@ -1,6 +1,7 @@
 import os
 import sys
 import warnings
+from pathlib import Path
 
 import torch
 import tyro
@@ -8,12 +9,6 @@ from kernels import get_kernel
 from torch.distributed.elastic.multiprocessing.errors import record
 from torchtitan.config.manager import ConfigManager, custom_registry
 from torchtitan.tools.logging import init_logger
-
-fa_version = "3" if "H100" in torch.cuda.get_device_name() else "2"
-sys.modules["flash_attn"] = get_kernel("kernels-community/flash-attn" + fa_version)
-
-from gpt.config import Config  # noqa: E402
-from gpt.train import Trainer  # noqa: E402
 
 warnings.filterwarnings("ignore", message="To copy construct from a tensor.*", category=UserWarning)
 
@@ -28,6 +23,12 @@ def train():
 
 @record
 def main():
+    fa_version = "3" if "H100" in torch.cuda.get_device_name() else "2"
+    sys.modules["flash_attn"] = get_kernel("kernels-community/flash-attn" + fa_version)
+
+    from gpt.config import Config  # noqa: E402
+    from gpt.train import Trainer  # noqa: E402
+
     init_logger()
     config, manager = Config(), ConfigManager(config_cls=Config)
 
@@ -51,6 +52,11 @@ def main():
     else:
         trainer.close()
         torch.distributed.destroy_process_group()
+
+
+def tui():
+    latest_run = max(Path("runs").glob("*"), key=lambda x: x.stat().st_ctime)
+    os.execvp("bash", ["bash", "-c", f"uv run wandb beta leet {latest_run}/wandb/latest-run"])
 
 
 if __name__ == "__main__":

@@ -9,6 +9,6 @@ wheels/
 .venv
 .env
 refs/
-outputs/
+runs/
 CLAUDE.md
 TODO.md

@@ -1,6 +1,6 @@
 ```bash
 uv run train
-uv run wandb beta leet
+uv run tui
 ```
 
 Refs:

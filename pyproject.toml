@@ -24,6 +24,7 @@ build-backend = "uv_build"
 
 [project.scripts]
 train = "gpt:train"
+tui = "gpt:tui"
 
 [tool.uv]
 prerelease = "allow"

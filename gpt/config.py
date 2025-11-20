@@ -15,7 +15,7 @@ class DatasetConfig:
 class DataConfig:
     dataset: DatasetConfig = field(default_factory=DatasetConfig)
     tokenizer_path: str = "gpt/tokenizer/olmo.json"
-    eos_token: str = "<|end_of_text|>"
+    eos_token: str = "<|endoftext|>"
     seq_len: int = 4096
     pad_to: int = 4096
     column: str = "text"
@@ -59,7 +59,7 @@ class AttnConfig:
 
 @dataclass
 class ModelConfig:
-    type: Literal["transformer", "kda"] = "transformer"
+    type: Literal["olmo"] = "olmo"
     hidden_size: int = 1024
     num_layers: int = 24
     head_dim: int = 128
@@ -77,7 +77,7 @@ class LossConfig:
 
 @dataclass
 class TrainerConfig:
-    steps: int = 100
+    steps: int = 50
     param_dtype: Literal["bfloat16", "float32"] = "bfloat16"
     reduce_dtype: Literal["float32"] = "float32"
     enable_cpu_offload: bool = False
@@ -88,7 +88,7 @@ class MetricsConfig:
     log_freq: int = 1
     enable_wandb: bool = True
     enable_tensorboard: bool = False
-    save_tb_folder: str = "metrics"
+    save_tb_folder: str = "runs"
     save_for_all_ranks: bool = False
     disable_color_printing: bool = False
 
@@ -110,7 +110,7 @@ class CheckpointConfig:
 @dataclass
 class Job:
     config_file: str | None = None
-    dump_folder: str = "./outputs"
+    dump_folder: str = "."
 
 
 @dataclass
@@ -118,7 +118,7 @@ class Comm:
     init_timeout_seconds: int = 300
     train_timeout_seconds: int = 100
     trace_buf_size: int = 20000
-    save_traces_folder: str = "outputs/comm_traces"
+    save_traces_folder: str = "runs/comm_traces"
     save_traces_file_prefix: str = "rank_"
 
 

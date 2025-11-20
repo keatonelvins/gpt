@@ -86,7 +86,7 @@ class Trainer:
         batch = {k: v.to(self.device, non_blocking=True) for k, v in batch.items()}
 
         with self.maybe_amp:
-            hidden_states = self.model(**batch)
+            hidden_states = self.model(batch)
             loss = self.loss_fn(hidden_states, batch["labels"], self.model.lm_head)
 
         loss.backward()
