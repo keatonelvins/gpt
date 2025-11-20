@@ -37,7 +37,7 @@ def build_dataset(config: DataConfig, tokenizer: Tokenizer, eos_token_id: int):
     ).with_format("torch")
     return ds.map(
         partial(build_inputs, pad_id=eos_token_id, pad_to=config.pad_to),
-        desc="Building inputs...",
+        desc="Building input batches...",
         num_proc=os.cpu_count(),
         remove_columns=ds.column_names,
     )
@@ -78,15 +78,17 @@ def pack(examples: pa.Table, seq_len: int) -> pa.Table:
     tok_counts = [b["len"] for b in bins]
     offs = np.cumsum([0] + tok_counts, dtype=ids_taken.offsets.type.to_pandas_dtype())
     packed_ids = type(ids_taken).from_arrays(offs, ids_taken.values)
-    dl = lens[reorder]
-    pos = np.ones(int(offs[-1]), dtype=np.int32)
-    pos[0] = 0
-    if dl.size > 1:
-        cut = dl[:-1].cumsum()
-        pos[cut] = -(dl[:-1] - 1)
-    position_ids = type(ids_taken).from_arrays(offs, pa.array(pos.cumsum(), type=pa.int32()))
 
-    return pa.Table.from_arrays([packed_ids, position_ids], names=["input_ids", "position_ids"])
+    dl = lens[reorder]
+    docs_per_bin = [len(b["ids"]) for b in bins]
+    dl_split = np.split(dl, np.cumsum(docs_per_bin)[:-1])
+    cu_seqlens_list = [np.concatenate(([0], d.cumsum())).astype(np.int32) for d in dl_split]
+    cu_seqlens = pa.ListArray.from_arrays(
+        np.cumsum([0] + [d + 1 for d in docs_per_bin], dtype=np.int32),
+        np.concatenate(cu_seqlens_list),
+    )
+
+    return pa.Table.from_arrays([packed_ids, cu_seqlens], names=["input_ids", "cu_seqlens"])
 
 
 def pad(t: torch.Tensor, pad_id: int, pad_to: int) -> torch.Tensor:
@@ -100,11 +102,8 @@ def pad(t: torch.Tensor, pad_id: int, pad_to: int) -> torch.Tensor:
 
 def build_inputs(batch: dict[str, torch.Tensor], pad_id: int, pad_to: int) -> dict[str, torch.Tensor]:
     """Pad tensors to multiple of pad_to and build labels column w/ appropriate masking."""
-    labels = batch["input_ids"].clone()
-    labels[batch["position_ids"] == 0] = -100  # mask boundary tokens
+    batch["labels"] = pad(batch["input_ids"].clone(), pad_id=-100, pad_to=pad_to)
     batch["input_ids"] = pad(batch["input_ids"], pad_id=pad_id, pad_to=pad_to)
-    batch["position_ids"] = pad(batch["position_ids"], pad_id=0, pad_to=pad_to)
-    batch["labels"] = pad(labels, pad_id=-100, pad_to=pad_to)
 
     return batch
 

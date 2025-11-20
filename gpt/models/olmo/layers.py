@@ -1,9 +1,7 @@
-from typing import Any
-
-import torch
 import torch.nn as nn
 from fla.layers.attn import Attention
 from fla.modules import GatedMLP, RMSNorm
+from torch import Tensor
 
 from gpt.config import ModelConfig
 
@@ -14,26 +12,15 @@ class OlmoBlock(nn.Module):
         self.config = config
         self.layer_idx = layer_idx
 
-        self.attn_norm = RMSNorm(config.hidden_size, eps=config.norm_eps)
+        self.attn_norm = RMSNorm(hidden_size=config.hidden_size, eps=config.norm_eps)
         self.attn = Attention(hidden_size=config.hidden_size, layer_idx=layer_idx, **vars(config.attn))
-        self.mlp_norm = RMSNorm(config.hidden_size, eps=config.norm_eps)
-        self.mlp = GatedMLP(config.hidden_size)
+        self.mlp_norm = RMSNorm(hidden_size=config.hidden_size, eps=config.norm_eps)
+        self.mlp = GatedMLP(hidden_size=config.hidden_size)
 
-    def forward(
-        self,
-        hidden_states: torch.Tensor,
-        attention_mask: torch.Tensor | None = None,
-        **kwargs: dict[str, Any],
-    ) -> tuple[torch.FloatTensor, torch.FloatTensor]:
-        residual = hidden_states
-        hidden_states = self.attn_norm(hidden_states)
-        hidden_states, attentions, _ = self.attn(
-            hidden_states=hidden_states,
-            attention_mask=attention_mask,
-            **kwargs,
-        )
-        hidden_states, residual = self.mlp_norm(hidden_states, residual, True)
-        hidden_states = self.mlp(hidden_states, **kwargs)
-        hidden_states = residual + hidden_states
+    def forward(self, x: Tensor, cu_seqlens: Tensor) -> tuple[Tensor, Tensor]:
+        residual, x = x, self.attn_norm(x)
+        x, attentions, _ = self.attn(hidden_states=x, cu_seqlens=cu_seqlens)
+        x, residual = self.mlp_norm(x, residual=residual)
+        x = self.mlp(x) + residual
 
-        return hidden_states, attentions
+        return x, attentions

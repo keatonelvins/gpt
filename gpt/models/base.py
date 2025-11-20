@@ -27,8 +27,8 @@ class GPT(nn.Module):
             "lm_head_params": list(self.lm_head.parameters()),
         }
 
-    def forward(self, batch: dict[str, torch.Tensor]) -> torch.FloatTensor:
+    def forward(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         hidden_states = self.embeddings(batch["input_ids"])
         for layer in self.layers:
-            hidden_states, _ = layer(hidden_states)
+            hidden_states, _ = layer(hidden_states, cu_seqlens=batch["cu_seqlens"])
         return self.norm(hidden_states)
