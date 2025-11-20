@@ -2,13 +2,15 @@ import os
 import sys
 import warnings
 
+import torch
 import tyro
 from kernels import get_kernel
 from torch.distributed.elastic.multiprocessing.errors import record
 from torchtitan.config.manager import ConfigManager, custom_registry
 from torchtitan.tools.logging import init_logger
 
-sys.modules["flash_attn"] = get_kernel("kernels-community/flash-attn2")
+fa_version = "3" if "H100" in torch.cuda.get_device_name() else "2"
+sys.modules["flash_attn"] = get_kernel("kernels-community/flash-attn" + fa_version)
 
 from gpt.config import Config  # noqa: E402
 from gpt.train import Trainer  # noqa: E402
@@ -40,7 +42,15 @@ def main():
             config = tyro.cli(Config, args=cli_args, default=base_config, registry=custom_registry)
 
     trainer = Trainer(config)
-    trainer.train()
+    try:
+        trainer.train()
+    except Exception:
+        if trainer:
+            trainer.close()
+        raise
+    else:
+        trainer.close()
+        torch.distributed.destroy_process_group()
 
 
 if __name__ == "__main__":

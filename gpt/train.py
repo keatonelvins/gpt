@@ -27,25 +27,17 @@ class Trainer:
         self.step = 0
         self.config = config
 
-        self.gc = utils.GarbageCollection()
-
         self.rank = int(os.getenv("LOCAL_RANK", "0"))
         self.world_size = int(os.getenv("WORLD_SIZE", "1"))
 
         utils.device_module.set_device(torch.device(f"{utils.device_type}:{self.rank}"))
         self.device = utils.device_module.current_device()
+        self.gc = utils.GarbageCollection()
 
         init_distributed(config.comm, enable_cpu_backend=config.trainer.enable_cpu_offload)
 
         self.parallel_dims = ParallelDims(
-            dp_replicate=config.dist.dp_replicate,
-            dp_shard=config.dist.dp_shard,
-            tp=1,
-            pp=1,
-            cp=1,
-            ep=1,
-            etp=1,
-            world_size=self.world_size,
+            **vars(config.dist), pp=1, cp=1, ep=1, etp=1, world_size=self.world_size
         )
         self.mesh = self.parallel_dims.world_mesh if self.world_size > 1 else None
         self.metrics = build_metrics_processor(config, self.parallel_dims)
@@ -117,15 +109,12 @@ class Trainer:
         self.total_tokens += ntokens
 
         if self.metrics.should_log(self.step):
-            extra_metrics = {
-                "n_tokens_seen": self.total_tokens,
-            }
             self.metrics.log(
                 step=self.step,
                 global_avg_loss=loss.item(),
                 global_max_loss=loss.item(),
                 grad_norm=grad_norm.item(),
-                extra_metrics=extra_metrics,
+                extra_metrics={"total_tokens": self.total_tokens},
             )
 
         if self.step % self.config.ckpt.save_every == 0:
@@ -142,5 +131,7 @@ class Trainer:
 
             self.train_step(batch)
             self.gc.run(self.step)
-        self.metrics.close()
         return self.model
+
+    def close(self) -> None:
+        self.metrics.close()

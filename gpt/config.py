@@ -27,6 +27,7 @@ class DataConfig:
 class DistributedConfig:
     dp_replicate: int = 1
     dp_shard: int = -1
+    tp: int = 1
 
 
 @dataclass
@@ -68,7 +69,6 @@ class ModelConfig:
 class LossConfig:
     type: Literal["fused", "fused_linear", "torch"] = "fused"
     use_l2warp: bool = False
-    num_chunks: int = 8
 
 
 @dataclass
@@ -114,7 +114,7 @@ class Comm:
     init_timeout_seconds: int = 300
     train_timeout_seconds: int = 100
     trace_buf_size: int = 20000
-    save_traces_folder: str = "comm_traces"
+    save_traces_folder: str = "outputs/comm_traces"
     save_traces_file_prefix: str = "rank_"
 
 

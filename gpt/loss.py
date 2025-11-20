@@ -8,26 +8,23 @@ from gpt.config import LossConfig
 
 
 class Loss(nn.Module):
-    def __init__(self, loss_config: LossConfig):
+    def __init__(self, config: LossConfig):
         super().__init__()
-        if loss_config.type == "fused_linear":
-            self.criterion = FusedLinearCrossEntropyLoss(
-                num_chunks=loss_config.num_chunks,
-                use_l2warp=loss_config.use_l2warp,
-            )
-        elif loss_config.type == "fused":
+        if config.type == "fused_linear":
+            self.criterion = FusedLinearCrossEntropyLoss(use_l2warp=config.use_l2warp)
+        elif config.type == "fused":
             self.criterion = FusedCrossEntropyLoss(inplace_backward=True)
         else:
             self.criterion = nn.CrossEntropyLoss()
-        self.use_l2warp = loss_config.use_l2warp
-        self.materialize_logits = loss_config.type != "fused_linear"
+        self.use_l2warp = config.use_l2warp
+        self.materialize_logits = config.type != "fused_linear"
 
-    def forward(self, h: Tensor, labels: LongTensor, lm_head: nn.Linear) -> Tensor:
+    def forward(self, hidden_states: Tensor, labels: LongTensor, lm_head: nn.Linear) -> Tensor:
         if self.materialize_logits:
-            logits = lm_head(h)
+            logits = lm_head(hidden_states)
             loss = self.criterion(logits.view(labels.numel(), -1), labels.view(-1))
             return l2_warp(loss, logits) if self.use_l2warp else loss
-        return self.criterion(h, labels, lm_head.weight, lm_head.bias)
+        return self.criterion(hidden_states, labels, lm_head.weight, lm_head.bias)
 
 
 def build_loss(loss_config: LossConfig) -> Loss:
