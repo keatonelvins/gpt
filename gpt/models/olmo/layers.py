@@ -11,7 +11,6 @@ from gpt.config import ModelConfig
 class OlmoBlock(nn.Module):
     def __init__(self, config: ModelConfig, layer_idx: int):
         super().__init__()
-        self.prenorm = config.prenorm
         self.fp32_residual = config.fp32_residual
         self.layer_idx = layer_idx
         self.num_layers = config.num_layers
@@ -39,7 +38,7 @@ class OlmoBlock(nn.Module):
 
     def forward(self, x: Tensor, cu_seqlens: Tensor) -> Tensor:
         residual = x
+        x = self.attn_norm(x)
         x, _, _ = self.attn(hidden_states=x, cu_seqlens=cu_seqlens)
-        x = self.attn_norm(x, residual=residual, prenorm=self.prenorm, residual_in_fp32=self.fp32_residual)
-        x = self.mlp(x)
-        return self.mlp_norm(x, residual=residual, prenorm=self.prenorm, residual_in_fp32=self.fp32_residual)
+        x, residual = self.mlp_norm(x, residual=residual, prenorm=True, residual_in_fp32=self.fp32_residual)
+        return self.mlp(x) + residual

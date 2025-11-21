@@ -22,7 +22,7 @@ class Loss(nn.Module):
     def forward(self, hidden_states: Tensor, labels: LongTensor, lm_head: nn.Linear) -> Tensor:
         if self.materialize_logits:
             logits = lm_head(hidden_states)
-            loss = self.criterion(logits.view(labels.numel(), -1), labels.view(-1))
+            loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
             return l2_warp(loss, logits) if self.use_l2warp else loss
         return self.criterion(hidden_states, labels, lm_head.weight, lm_head.bias)
 

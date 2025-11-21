@@ -102,7 +102,7 @@ def pad(t: torch.Tensor, pad_id: int, pad_to: int) -> torch.Tensor:
 
 def build_inputs(batch: dict[str, torch.Tensor], pad_id: int, pad_to: int) -> dict[str, torch.Tensor]:
     """Pad tensors to multiple of pad_to and build labels column w/ appropriate masking."""
-    batch["labels"] = pad(batch["input_ids"].clone(), pad_id=-100, pad_to=pad_to)
+    batch["labels"] = pad(batch["input_ids"][1:], pad_id=-100, pad_to=pad_to)
     batch["input_ids"] = pad(batch["input_ids"], pad_id=pad_id, pad_to=pad_to)
 
     return batch

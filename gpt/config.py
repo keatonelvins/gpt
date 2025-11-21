@@ -66,7 +66,6 @@ class ModelConfig:
     num_heads: int = 16
     norm_eps: float = 1e-6
     vocab_size: int | None = None
-    prenorm: bool = False
     fp32_residual: bool = False
     attn: AttnConfig = field(default_factory=AttnConfig)
 
