@@ -1,3 +1,5 @@
+import math
+
 import torch
 import torch.nn as nn
 from fla.modules import RMSNorm
@@ -17,11 +19,16 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
     def init_weights(self):
-        self.embed.reset_parameters()
+        std = 0.02
+        nn.init.trunc_normal_(self.embed.weight, mean=0.0, std=std, a=-3 * std, b=3 * std)
+
         self.norm.reset_parameters()
-        self.lm_head.reset_parameters()
+
         for layer in self.layers:
             layer.init_weights()
+
+        head_std = 1.0 / math.sqrt(self.config.hidden_size)
+        nn.init.trunc_normal_(self.lm_head.weight, mean=0.0, std=head_std, a=-3 * head_std, b=3 * head_std)
 
     def get_param_groups(self) -> dict[str, list[torch.Tensor]]:
         return {
