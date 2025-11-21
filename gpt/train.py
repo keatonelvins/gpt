@@ -71,7 +71,7 @@ class Trainer:
             self.model.init_weights()
         self.model.train()
 
-        self.optimizer = build_optimizer(self.model, self.config, self.mesh)
+        self.optimizer = build_optimizer(self.model, self.config)
         self.scheduler = build_lr_schedulers([self.optimizer], self.config.sched, self.config.trainer.steps)
 
         if config.ckpt.resume_from:

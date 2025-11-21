@@ -17,10 +17,13 @@ class OlmoBlock(nn.Module):
         self.mlp_norm = RMSNorm(hidden_size=config.hidden_size, eps=config.norm_eps)
         self.mlp = GatedMLP(hidden_size=config.hidden_size)
 
-    def forward(self, x: Tensor, cu_seqlens: Tensor) -> tuple[Tensor, Tensor]:
-        residual, x = x, self.attn_norm(x)
-        x, attentions, _ = self.attn(hidden_states=x, cu_seqlens=cu_seqlens)
-        x, residual = self.mlp_norm(x, residual=residual)
-        x = self.mlp(x) + residual
+    def init_weights(self):
+        self.attn_norm.reset_parameters()
+        self.mlp_norm.reset_parameters()
 
-        return x, attentions
+    def forward(self, x: Tensor, cu_seqlens: Tensor) -> Tensor:
+        residual = x
+        x, _, _ = self.attn(hidden_states=x, cu_seqlens=cu_seqlens)
+        x = self.attn_norm(x, residual=residual)
+        x = self.mlp(x)
+        return self.mlp_norm(x, residual=residual)

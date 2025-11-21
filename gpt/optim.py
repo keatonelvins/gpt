@@ -1,14 +1,13 @@
-from torch.distributed.tensor import DeviceMesh
+from torch.optim import AdamW, Optimizer
 
 from gpt.config import Config
 from gpt.models.base import GPT
-from gpt.optimizer.muon import Muon
 
 
-def build_optimizer(model: GPT, config: Config, mesh: DeviceMesh) -> Muon:
+def build_optimizer(model: GPT, config: Config) -> Optimizer:
     param_groups = model.get_param_groups()
     params = [
-        {"params": param_groups["matrix_params"]},
+        {"params": param_groups["matrix_params"], "algorithm": "adamw"},
         {"params": param_groups["vector_params"], "algorithm": "adamw"},
         {"params": param_groups["embed_params"], "algorithm": "adamw", "weight_decay": 0},
         {
@@ -19,10 +18,9 @@ def build_optimizer(model: GPT, config: Config, mesh: DeviceMesh) -> Muon:
         },
     ]
 
-    return Muon(
+    return AdamW(
         params,
-        distributed_mesh=mesh,
         lr=config.optim.lr,
         weight_decay=config.optim.weight_decay,
-        cautious_wd=config.optim.cautious_wd,
+        fused=True,
     )
